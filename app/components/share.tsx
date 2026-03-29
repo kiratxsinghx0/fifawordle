@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import NextPuzzleTimer from "./timers";
 const PRIZES_NOTICE = "You can win prizes in upcoming Wordle games.";
 
 const STATUS_EMOJI: Record<string, string> = {
@@ -84,13 +85,17 @@ export default function ShareModal({ won, answer, guessCount, statuses, onClose 
             style={{
               fontSize: "1.9rem",
               fontWeight: 900,
-              margin: "0 0 12px",
+              margin: "0 0 8px",
               letterSpacing: "-0.5px",
               color: "#111",
             }}
           >
             {won ? "Congratulations!" : "Thanks for playing today!"}
           </h2>
+
+          <div style={{ marginBottom: "16px" }}>
+            <NextPuzzleTimer />
+          </div>
 
           <p
             style={{

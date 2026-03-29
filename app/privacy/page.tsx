@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import PageHeader from "../components/page-header";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — FIFA Wordle",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="legal-page">
+    <>
+      <PageHeader showHowToPlay={false} />
+      <main className="legal-page">
       <article className="legal-page__inner">
         <p className="legal-page__back">
           <Link href="/">← Back to FIFA Wordle</Link>
@@ -78,5 +81,6 @@ export default function PrivacyPage() {
         </section>
       </article>
     </main>
+    </>
   );
 }

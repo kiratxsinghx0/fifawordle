@@ -1,4 +1,3 @@
-// FIX: Import globals.css here so animations (flip, shake) are applied globally
 import type { Viewport } from "next";
 import Link from "next/link";
 import { CookieBanner } from "./components/cookie-banner";
@@ -22,6 +21,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* AdSense Script */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5063452717128088"
+          crossOrigin="anonymous"
+        ></script>
+      </head>
+
       <body
         style={{
           fontFamily:
@@ -29,7 +37,9 @@ export default function RootLayout({
         }}
       >
         {children}
+
         <CookieBanner />
+
         <footer className="site-footer">
           <nav className="site-footer-nav" aria-label="Legal and contact">
             <ul className="site-footer-links">

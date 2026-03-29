@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const STORAGE_KEY = "fifa-wordle-cookie-consent";
+/** Same key used when gating first-visit UI (e.g. How to play) until the user accepts. */
+export const COOKIE_CONSENT_STORAGE_KEY = "fifa-wordle-cookie-consent";
 const EXIT_MS = 380;
 
 export function CookieBanner() {
@@ -14,7 +15,7 @@ export function CookieBanner() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
       if (stored === "accepted" || stored === "rejected") {
         return;
       }
@@ -40,7 +41,7 @@ export function CookieBanner() {
 
   const dismiss = useCallback((value: "accepted" | "rejected") => {
     try {
-      localStorage.setItem(STORAGE_KEY, value);
+      localStorage.setItem(COOKIE_CONSENT_STORAGE_KEY, value);
     } catch {
       /* ignore */
     }

@@ -52,8 +52,8 @@
   }
 }
 
-/* Narrow phones: larger grid + key tap targets */
-@media (max-width: 425px) {
+/* Narrow phones: larger grid + key tap targets (430px includes iPhone 14 Pro Max) */
+@media (max-width: 430px) {
   :root {
     --tile-size: 54px;
     --tile-gap: 5px;
@@ -66,8 +66,12 @@
   }
 
   .game-grid {
-    margin-bottom: 4px;
+    margin-bottom: 0;
   }
+}
+
+html {
+  overflow-x: hidden;
 }
 
 body {
@@ -87,6 +91,9 @@ main {
   flex-direction: column;
   min-height: 100svh;
   min-height: 100dvh;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /*
@@ -109,6 +116,9 @@ main {
   main {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
   }
@@ -116,13 +126,32 @@ main {
   .game-shell {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
     width: 100%;
+    max-width: 100%;
   }
 
   .game-keyboard {
     margin-top: auto;
     padding-top: 8px;
     padding-bottom: 0;
+  }
+}
+
+/*
+  iPhone 14 Pro Max and similar (≈430×932 CSS px): with flex-basis `auto`, the game shell
+  can size to its content and leave a gap above the footer; `0%` makes the flex item
+  absorb remaining height so margin-top: auto on .game-keyboard pins the keypad lower.
+*/
+@media (max-width: 767px) and (min-width: 426px) and (max-width: 434px) and (min-height: 900px) {
+  main {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+
+  .game-shell {
+    flex: 1 1 0%;
+    min-height: 0;
   }
 }
 
@@ -135,7 +164,7 @@ main {
   - 50%â†’100%: tile expands back up revealing the colored tile with the letter inside
   
   The letter stays inside the tile the whole time â€” it just squishes and expands with it.
-  JS only switches the tile from "flipping" class to static color AFTER the full 500ms,
+  JS only switches the tile from "flipping" class to static color AFTER the full flip duration,
   so the animation never gets cancelled mid-way.
 */
 @keyframes tileFlip {
@@ -146,7 +175,7 @@ main {
 }
 
 .tile.flipping {
-  animation: tileFlip 0.5s ease forwards;
+  animation: tileFlip 0.38s ease forwards;
 }
 
 /* POP â€” bounce when a letter is typed */
@@ -157,6 +186,39 @@ main {
 }
 
 .tile.pop { animation: pop 0.1s ease; }
+
+/* Win row — staggered bounce (left → right); transform-only so layout stays stable */
+@keyframes tileWinBounce {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  40% {
+    transform: translate3d(0, 0, 0) scale(1.14);
+  }
+  65% {
+    transform: translate3d(0, 0, 0) scale(0.96);
+  }
+  85% {
+    transform: translate3d(0, 0, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.game-tile.game-tile--win-bounce {
+  transform: translate3d(0, 0, 0);
+  animation: tileWinBounce 0.45s cubic-bezier(0.34, 1.45, 0.55, 1) both;
+  animation-delay: calc(var(--win-bounce-index, 0) * 100ms);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-tile.game-tile--win-bounce {
+    animation: none;
+    will-change: auto;
+  }
+}
 
 /* SHAKE â€” invalid guess */
 @keyframes shake {
@@ -188,15 +250,67 @@ button:not(.game-key):not(.game-key-wide):active {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
+/* Top row: balanced columns keep the logo centered with a help control on the right */
+.page-header-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0.5rem max(0.5rem, env(safe-area-inset-left, 0px)) 0.35rem
+    max(0.5rem, env(safe-area-inset-right, 0px));
+  gap: 0.25rem;
+}
+
+.page-header-bar__side {
+  min-width: 0;
+}
+
+.page-header-bar__side--end {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .page-title-logo-wrap {
+  grid-column: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto;
+  margin: 0;
   max-width: min(100%, 20rem);
-  padding: 0.5rem max(1rem, env(safe-area-inset-left, 0px)) 0.35rem
-    max(1rem, env(safe-area-inset-right, 0px));
+  padding: 0;
   border: none;
+}
+
+.page-header-how-to-play {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.page-header-how-to-play:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.page-header-how-to-play:focus-visible {
+  outline: 2px solid #14532d;
+  outline-offset: 2px;
+}
+
+.page-header-how-to-play__icon {
+  display: block;
 }
 
 .page-title-logo {
@@ -221,6 +335,7 @@ button:not(.game-key):not(.game-key-wide):active {
   justify-content: flex-start;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   padding-top: 10px;
   padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
   width: 100%;
@@ -262,23 +377,35 @@ button:not(.game-key):not(.game-key-wide):active {
   color: #6b7280;
 }
 
-.game-keyboard-footnote__today {
-  margin: 8px 0 0;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  font-weight: 600;
-  color: #374151;
+/* Hint strip — slightly inset vs grid width; min-height avoids jump when hint appears. */
+.game-hint-slot {
+  width: calc(5 * var(--tile-size) + 4 * var(--tile-gap) - 20px);
+  max-width: 100%;
+  margin-inline: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  /* Top-align hint so min-height does not leave a gap under the grid */
+  justify-content: flex-start;
+  min-height: 0;
+  transition: min-height 0.22s ease;
 }
 
-.game-keyboard-footnote__full {
-  font-weight: 700;
-  color: #111827;
+.game-hint-slot--active {
+  min-height: 4.75rem;
+  margin-top: 8px;
+}
+
+/* Tighter gap from hint to keys when a hint is showing */
+.game-hint-slot--active + .game-keyboard {
+  padding-top: 3px;
 }
 
 .game-hint-card {
-  width: min(100%, 17rem);
-  margin: 2px 10px 6px;
-  padding: 8px 11px 10px;
+  width: 100%;
+  margin: 0 0 2px;
+  padding: 10px 12px 12px;
   text-align: center;
   background: linear-gradient(180deg, #f4faf6 0%, #eef5f0 100%);
   border: 1px solid #c8e0d0;
@@ -286,11 +413,41 @@ button:not(.game-key):not(.game-key-wide):active {
   box-shadow:
     0 1px 2px rgba(19, 78, 58, 0.05),
     0 3px 10px rgba(19, 78, 58, 0.08);
+  overflow: hidden;
+}
+
+@keyframes game-hint-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.game-hint-card__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-hint-card__content--enter {
+  animation: game-hint-content-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-hint-card__content--enter {
+    animation: none;
+  }
 }
 
 .game-hint-card__label {
-  margin: 0 0 4px;
-  font-size: 0.62rem;
+  margin: 0 0 5px;
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-weight: 700;
@@ -299,7 +456,7 @@ button:not(.game-key):not(.game-key-wide):active {
 
 .game-hint-card__text {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.4;
   color: #14532d;
@@ -315,7 +472,7 @@ button:not(.game-key):not(.game-key-wide):active {
 }
 
 .game-hint-card--reveal .game-hint-card__text {
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #111827;
 }
@@ -390,10 +547,80 @@ button:not(.game-key):not(.game-key-wide):active {
   box-shadow: 0 4px 14px rgba(45, 106, 79, 0.35);
 }
 
+/* Win toast — absolutely above grid; no reflow (same pattern as validation layer) */
+.game-grid-wrap {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+@keyframes gameWinToastIn {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes gameWinToastOut {
+  from {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-50%, -8px, 0);
+  }
+}
+
+.game-win-toast {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 5;
+  margin-bottom: clamp(6px, 1.8vw, 12px);
+  padding: 6px 18px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4ab787 0%, #0c7241 100%);
+  color: #fff;
+  font-size: clamp(1rem, 0.95rem + 0.35vw, 1.2rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 6px 20px rgba(45, 106, 79, 0.35);
+  white-space: nowrap;
+  max-width: min(92vw, 20rem);
+  text-align: center;
+  opacity: 0;
+  transform: translate3d(-50%, 10px, 0);
+  animation: gameWinToastIn 0.42s ease forwards;
+}
+
+.game-win-toast--exit {
+  animation: gameWinToastOut 0.32s ease forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-win-toast {
+    animation: none;
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0);
+  }
+
+  .game-win-toast--exit {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 .game-grid {
   display: grid;
   gap: var(--tile-gap);
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .game-grid-row {
@@ -415,30 +642,76 @@ button:not(.game-key):not(.game-key-wide):active {
   box-sizing: border-box;
 }
 
+/*
+  Keyboard: CSS Grid on each row so fr + gap fills exactly 100% (flex + calc
+  often rounds up and overflows; overflow-x on the shell then clips Q / ENTER).
+  Middle row is narrower (9 keys); bottom uses 1.5fr + 7×1fr + 1.5fr = 10 units like the top row.
+*/
 .game-keyboard {
   text-align: center;
   margin-top: 0;
+  /* center in the column like .game-grid-wrap; stretch + max-width left the 500px cap hugging flex-start */
+  align-self: center;
   margin-inline: auto;
   padding-top: 6px;
+  padding-inline: clamp(8px, 2.6vw, 14px);
   width: 100%;
-  max-width: var(--keyboard-max-width);
-  padding-left: 4px;
-  padding-right: 4px;
+  max-width: min(var(--keyboard-max-width), 100%);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .game-keyboard-row {
-  /* One letter width = top row: 10 keys + 9 gaps across full row width */
+  display: grid;
+  gap: var(--keyboard-gap);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: var(--keyboard-row-gap);
+  box-sizing: border-box;
+}
+
+/* Top: 10 equal tracks — same total width as bottom row’s 10 fr-units */
+.game-keyboard-row:first-child {
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+}
+
+/*
+  Middle: 9 keys, same per-key width as top row; row width = 9×letter + 8 gaps.
+  Centered (Wordle-style); grid avoids flex rounding overflow.
+*/
+.game-keyboard-row:nth-child(2) {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  width: calc((9 * (100% - 9 * var(--keyboard-gap)) / 10) + 8 * var(--keyboard-gap));
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/*
+  Bottom: same key widths as top (--key-letter). Flex sum is (100% − one gap), not 100%,
+  so it does not overflow; fr+gap on the top row was mismatched to 8 gaps here.
+*/
+.game-keyboard-row:last-child {
   --key-letter: calc((100% - 9 * var(--keyboard-gap)) / 10);
   display: flex;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: stretch;
   gap: var(--keyboard-gap);
   width: 100%;
-  margin-bottom: var(--keyboard-row-gap);
+  min-width: 0;
+  margin-bottom: 0;
 }
 
-.game-keyboard-row:last-child {
-  margin-bottom: 0;
+.game-keyboard-row:last-child .game-key {
+  flex: 0 1 var(--key-letter);
+  width: auto;
+  max-width: none;
+}
+
+.game-keyboard-row:last-child .game-key-wide {
+  flex: 0 1 calc(var(--key-letter) * 1.5);
+  max-width: none;
 }
 
 .game-key,
@@ -459,23 +732,23 @@ button:not(.game-key):not(.game-key-wide):active {
   justify-content: center;
 }
 
-/* Letter keys: fixed width from top-row geometry so every row matches Wordle */
 .game-key {
-  flex: 0 0 var(--key-letter);
   box-sizing: border-box;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   padding: 0 1px;
   font-size: var(--key-font);
 }
 
-/* ENTER / backspace: 1.5× letter width, same proportion at any viewport */
 .game-key-wide {
-  flex: 0 0 calc(var(--key-letter) * 1.5);
   box-sizing: border-box;
   min-width: 0;
-  max-width: calc(var(--key-letter) * 1.5);
-  padding: 0 3px;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 2px;
   white-space: nowrap;
+  overflow: hidden;
   font-size: clamp(0.5rem, 2.6vw, var(--key-font));
   letter-spacing: 0.02em;
 }
@@ -1031,5 +1304,385 @@ button:not(.game-key):not(.game-key-wide):active {
 
   .site-footer-links li:not(:last-child)::after {
     display: none;
+  }
+}
+
+/* How to play page */
+.how-to-play-page.legal-page {
+  padding-top: 0.65rem;
+  padding-bottom: 1rem;
+}
+
+/* Longhand only so left padding always wins over base `.legal-page__inner` */
+main.how-to-play-page.legal-page article.legal-page__inner {
+  padding-top: 0.65rem;
+  padding-bottom: 0.85rem;
+  padding-inline: clamp(1.65rem, 6.5vw, 2.35rem);
+}
+
+.how-to-play-page .legal-page__back {
+  margin-bottom: 0.5rem;
+}
+
+.how-to-play-page .legal-page__header {
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.55rem;
+}
+
+.how-to-play-page .legal-page__title {
+  margin-bottom: 0.2rem;
+  font-size: clamp(1.25rem, 3.8vw, 1.55rem);
+}
+
+.how-to-play-page__header {
+  margin-bottom: 0;
+}
+
+.how-to-play-page__title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.how-to-play-page__lede {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: #3d3d3d;
+}
+
+.how-to-play-page .legal-page__intro-block.how-to-play-page__rules-wrap {
+  margin-bottom: 0.65rem;
+}
+
+.how-to-play-rules {
+  margin: 0;
+  padding-left: 1.05rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: #2a2a2a;
+}
+
+.how-to-play-rules li + li {
+  margin-top: 0.28rem;
+}
+
+/* How to play — hint panel (reference: #F0F2F5, 12px radius, 1rem hint row) */
+.how-to-play-hint-panel {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 14px 16px 14px;
+  text-align: left;
+  background-color: #f0f2f5;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+/* Must beat `.legal-page__section p` (otherwise colors never apply) */
+.how-to-play-hint-panel > p.how-to-play-hint-panel__label {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1.25;
+}
+
+.how-to-play-hint-panel > p.how-to-play-hint-panel__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.45rem;
+  margin: 0 0 8px;
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.how-to-play-hint-panel__item {
+  white-space: nowrap;
+}
+
+.how-to-play-hint-panel__dot {
+  display: inline;
+  margin: 0 0.15em;
+  color: #9ca3af;
+  font-weight: 500;
+  user-select: none;
+}
+
+.how-to-play-hint-panel > p.how-to-play-hint-panel__sub {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-weight: 400;
+  color: #6a6c6f;
+}
+
+.how-to-play-page .legal-page__section.how-to-play-page__footnote-section {
+  margin-bottom: 0;
+  padding-top: 0.55rem;
+}
+
+.how-to-play-page__footnote {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #5a5a5a;
+}
+
+.how-to-play-page__footnote a {
+  color: #14532d;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.how-to-play-page__footnote a:hover {
+  color: #0f3d21;
+}
+
+/* How to play — example rows (same tile system as grid; flip only on colored tiles) */
+.how-to-play-page__examples .how-to-play-tile-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--tile-gap);
+  --tile-size: 40px;
+  --tile-gap: 5px;
+  --tile-font: 1.05rem;
+  --tile-border-width: 2px;
+  margin: 0.3rem 0 0.45rem;
+}
+
+@media (min-width: 480px) {
+  .how-to-play-page__examples .how-to-play-tile-row {
+    --tile-size: 44px;
+    --tile-gap: 6px;
+    --tile-font: 1.15rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .how-to-play-page__examples .how-to-play-tile-row {
+    --tile-size: 48px;
+    --tile-font: 1.25rem;
+  }
+}
+
+.how-to-play-example-tile {
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .how-to-play-page__examples .how-to-play-example-tile.flipping {
+    animation: none !important;
+    background-color: var(--tile-bg) !important;
+    border-color: var(--tile-border) !important;
+    color: #fff !important;
+  }
+}
+
+.how-to-play-page .legal-page__section > h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.how-to-play-example + .how-to-play-example {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid #eef2ef;
+}
+
+.how-to-play-example__caption {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #2a2a2a;
+}
+
+.how-to-play-example__caption strong {
+  font-weight: 800;
+}
+
+.how-to-play-page__hints-section {
+  margin-bottom: 0.45rem;
+}
+
+.how-to-play-page .legal-page__section {
+  margin-bottom: 0.55rem;
+}
+
+.how-to-play-page .legal-page__intro-block + .legal-page__section {
+  padding-top: 0.55rem;
+}
+
+.how-to-play-page .legal-page__section ~ .legal-page__section {
+  padding-top: 0.55rem;
+}
+
+/* How to play — desktop centered; mobile floating card (portal renders under body) */
+.how-to-play-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.how-to-play-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  pointer-events: auto;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.how-to-play-modal-card {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  width: min(40rem, 100%);
+  max-width: 100%;
+  max-height: min(
+    90vh,
+    90dvh,
+    calc(
+      100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px
+    )
+  );
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e8ebe8;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  animation: howToPlayModalIn 0.55s ease-out;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .how-to-play-modal-root {
+    align-items: center;
+    justify-content: center;
+    /* Bottom ≥24px + safe area so the sheet is never glued to the edge */
+    padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+      max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px))
+      max(16px, env(safe-area-inset-left, 0px));
+    overflow: hidden;
+  }
+
+  .how-to-play-modal-card {
+    width: min(100%, calc(100vw - 32px));
+    max-width: none;
+    margin-inline: auto;
+    border-radius: 14px;
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.08),
+      0 16px 48px rgba(0, 0, 0, 0.22);
+    max-height: min(
+      90vh,
+      90dvh,
+      calc(
+        100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 48px
+      )
+    );
+    animation: howToPlayModalIn 0.45s ease-out;
+  }
+
+  .how-to-play-modal-scroll {
+    flex: 1 1 auto;
+    flex-basis: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    padding-top: 46px;
+    padding-bottom: clamp(16px, 4vw, 20px);
+    padding-left: clamp(16px, 4.5vw, 20px);
+    padding-right: clamp(16px, 4.5vw, 20px);
+  }
+}
+
+@media (max-width: 479px) {
+  .how-to-play-modal-root {
+    padding: max(14px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+      max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px))
+      max(12px, env(safe-area-inset-left, 0px));
+  }
+
+  .how-to-play-modal-card {
+    width: min(100%, calc(100vw - 24px));
+    border-radius: 12px;
+  }
+}
+
+.how-to-play-modal-close {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #888;
+  cursor: pointer;
+}
+
+.how-to-play-modal-close:hover {
+  color: #111;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.how-to-play-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 44px;
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1.65rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.65rem, env(safe-area-inset-right, 0px));
+}
+
+.how-to-play-modal--embedded {
+  padding-bottom: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .how-to-play-modal-card {
+    animation: none;
+  }
+}
+
+@keyframes howToPlayModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

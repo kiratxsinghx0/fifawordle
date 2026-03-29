@@ -1,6 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import ShareModal from "./share";
+import HowToPlayModal from "./how-to-play-modal";
+import { OPEN_HOW_TO_PLAY_EVENT } from "./page-header";
+import { COOKIE_CONSENT_STORAGE_KEY } from "./cookie-banner";
 import NextPuzzleTimer from "./timers";
 import { players } from "./players";
 
@@ -22,6 +25,23 @@ type PlayerRow = {
 };
 
 const HINT_LABELS = ["Age", "Club", "Country", "Position", "Trivia"] as const;
+
+/** Set in localStorage when the user dismisses the first-visit How to play modal. */
+const LS_HOW_TO_PLAY_DISMISSED = "fifaWordleHowToPlayDismissed";
+/** Explicit "seen how to play" flag — used with cookie consent for returning-user trivia hint. */
+const LS_HOW_TO_PLAY_SEEN = "howToPlaySeen";
+
+function readReturningUserHintEligible(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY) !== "accepted") return false;
+    if (localStorage.getItem(LS_HOW_TO_PLAY_SEEN) === "true") return true;
+    if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 function hintForWrongGuess(h: PlayerHint, wrongGuessCount: number): { label: string; text: string } {
   const tier = Math.min(Math.max(wrongGuessCount - 1, 0), HINT_LABELS.length - 1);
@@ -63,8 +83,19 @@ const nameNotice =
 
 const MAX_GUESSES  = 6;
 const WORD_LENGTH  = 5;
-const FLIP_DURATION = 400;
-const FLIP_STAGGER  = 100;
+const FLIP_DURATION = 340;
+const FLIP_STAGGER  = 80;
+
+/** Win row: staggered tile bounce (left → right), then “Genius” toast above the grid */
+const WIN_BOUNCE_STAGGER_MS = 100;
+const WIN_BOUNCE_DURATION_MS = 450;
+const WIN_TOAST_VISIBLE_MS = 2000;
+const WIN_TOAST_EXIT_MS = 320;
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 const STATUS_PRIORITY: Record<string, number> = { correct: 3, present: 2, absent: 1 };
 const STATUS_COLOR: Record<string, string> = {
@@ -93,10 +124,59 @@ function getLetterStatuses(guess: string, answer: string): string[] {
   return result;
 }
 
+/** Bump when shipping a new daily puzzle so stale guesses/hints do not carry over. */
+const CURRENT_GAME_ID = "1";
+const LS_GAME_ID_KEY = "gameId";
+
 const LS_GUESS_KEY = "guess";
 const LS_USER_HAS_PLAYED_KEY = "userHasPlayed";
 const LS_USER_HAS_PLAYED_VALUE = "yes";
 const LS_PUZZLE_ID_KEY = "puzzleId";
+/** When set to the current puzzle id, user closed share — show next-puzzle timer (restored on reload). */
+const LS_SHARE_DISMISSED_PUZZLE_KEY = "fifaWordleShareDismissedPuzzleId";
+
+const GAME_STORAGE_KEYS = [
+  LS_GUESS_KEY,
+  LS_USER_HAS_PLAYED_KEY,
+  LS_PUZZLE_ID_KEY,
+  LS_SHARE_DISMISSED_PUZZLE_KEY,
+] as const;
+
+/**
+ * If persisted `gameId` matches `CURRENT_GAME_ID`, keep game data. Otherwise clear game-related keys
+ * and persist the new id (new puzzle / first visit).
+ */
+function syncGameIdStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const stored = localStorage.getItem(LS_GAME_ID_KEY);
+    if (stored === CURRENT_GAME_ID) return;
+    for (const key of GAME_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
+    localStorage.setItem(LS_GAME_ID_KEY, CURRENT_GAME_ID);
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function persistShareDismissed(puzzleId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LS_SHARE_DISMISSED_PUZZLE_KEY, puzzleId);
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function readShareDismissedForPuzzle(puzzleId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(LS_SHARE_DISMISSED_PUZZLE_KEY) === puzzleId;
+  } catch {
+    return false;
+  }
+}
 
 function parseGuessObject(raw: string, targetAnswer: string): { guesses: string[]; statuses: string[][] } | null {
   const obj = JSON.parse(raw) as Record<string, string>;
@@ -195,7 +275,59 @@ export default function Game() {
   const [shaking,       setShaking]       = useState(false);
   const [message,       setMessage]       = useState("");
   const [showModal,     setShowModal]     = useState(false);
+  const [showHowToPlay, setShowHowToPlay]  = useState(false);
   const [shareDismissed, setShareDismissed] = useState(false);
+  /** Cookie accepted + how to play seen — enables initial trivia before first guess (client-read). */
+  const [returningUserHints, setReturningUserHints] = useState(false);
+
+  useEffect(() => {
+    setReturningUserHints(readReturningUserHintEligible());
+  }, []);
+
+  const dismissHowToPlay = useCallback(() => {
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(LS_HOW_TO_PLAY_DISMISSED, "1");
+        localStorage.setItem(LS_HOW_TO_PLAY_SEEN, "true");
+      }
+    } catch {
+      /* quota / private mode */
+    }
+    setShowHowToPlay(false);
+    setReturningUserHints(readReturningUserHintEligible());
+  }, []);
+
+  /** First visit: show How to play after cookie "Accept all", until dismissed. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const tryOpenHowToPlay = () => {
+      try {
+        if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") return;
+        if (localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY) !== "accepted") return;
+        setShowHowToPlay(true);
+      } catch {
+        /* quota / private mode — don't show without readable consent */
+      }
+    };
+
+    tryOpenHowToPlay();
+
+    const onCookieConsent = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== "accepted") return;
+      tryOpenHowToPlay();
+      setReturningUserHints(readReturningUserHintEligible());
+    };
+    window.addEventListener("cookie-consent", onCookieConsent);
+    return () => window.removeEventListener("cookie-consent", onCookieConsent);
+  }, []);
+
+  /** Header help button opens How to play without waiting for first-visit flow. */
+  useEffect(() => {
+    const onOpenFromHeader = () => setShowHowToPlay(true);
+    window.addEventListener(OPEN_HOW_TO_PLAY_EVENT, onOpenFromHeader);
+    return () => window.removeEventListener(OPEN_HOW_TO_PLAY_EVENT, onOpenFromHeader);
+  }, []);
 
   // Animation state
   const [flippingRow,      setFlippingRow]      = useState<number | null>(null);
@@ -203,6 +335,10 @@ export default function Game() {
   const [flippingStatuses, setFlippingStatuses] = useState<string[]>([]);
   const [currentFlipCol,   setCurrentFlipCol]   = useState(-1);
   const [doneFlipCols,     setDoneFlipCols]     = useState<Set<number>>(new Set());
+  /** Row index (0-based) whose committed tiles play the win bounce; cleared after toast exits */
+  const [winBounceRow, setWinBounceRow] = useState<number | null>(null);
+  const [winToastVisible, setWinToastVisible] = useState(false);
+  const [winToastExiting, setWinToastExiting] = useState(false);
 
   const isAnimating = flippingRow !== null;
   const won      = guesses.length > 0 && guesses[guesses.length - 1] === answer;
@@ -210,25 +346,45 @@ export default function Game() {
   const gameOver = won || lost;
 
   const wrongGuessCount = guesses.filter((g) => g !== answer).length;
+
+  /** Trivia until the first guess is committed (stays up during flip — hint tier updates only after tiles finish). */
+  const showInitialTriviaHint = returningUserHints && guesses.length === 0;
+
   /** One hint at a time; each new wrong guess replaces the previous (age → club → country → position → trivia). */
   const currentHint = hintForWrongGuess(targetPlayer.hint, wrongGuessCount);
   const showProgressiveHints =
     wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
-  /** After a loss, reveal the player in the hint card (not above the grid). */
+
+  /** After a loss, reveal the player in the hint card (above keyboard, not in the grid). */
   const showAnswerReveal =
     lost && !isAnimating && !(gameOver && shareDismissed);
+
+  /** Stable key for animated hint body — changes only after a guess row commits, not mid-flip. */
+  const hintContentKey = showAnswerReveal
+    ? "answer"
+    : showInitialTriviaHint
+      ? "trivia"
+      : `prog-${wrongGuessCount}`;
+  const showHintSlot =
+    showInitialTriviaHint || showProgressiveHints || showAnswerReveal;
   const displayRevealName =
     nameNotice ??
     `${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`;
 
   // Restore when userHasPlayed is "yes" (puzzleId only exists after game ends)
   useEffect(() => {
+    syncGameIdStorage();
     const loaded = readStoredGuesses(PLAYER_TO_GUESS, answer);
     if (!loaded) return;
+    const last = loaded.guesses[loaded.guesses.length - 1];
+    const wasStoredWin = last === answer;
+    const gameDone = wasStoredWin || loaded.guesses.length === MAX_GUESSES;
+    const dismissedShare = gameDone && readShareDismissedForPuzzle(PLAYER_TO_GUESS);
     queueMicrotask(() => {
       setGuesses(loaded.guesses);
       setStatuses(loaded.statuses);
       setLetterStatus(letterStatusFromRows(loaded.guesses, loaded.statuses));
+      if (dismissedShare) setShareDismissed(true);
     });
   }, []);
 
@@ -244,7 +400,8 @@ export default function Game() {
       } else {
         const guess    = flippingGuess;
         const rowStats = flippingStatuses;
-        persistGuess(PLAYER_TO_GUESS, (flippingRow ?? 0) + 1, guess, answer);
+        const completedRowIndex = flippingRow ?? 0;
+        persistGuess(PLAYER_TO_GUESS, completedRowIndex + 1, guess, answer);
 
         setGuesses(prev => [...prev, guess]);
         setStatuses(prev => [...prev, rowStats]);
@@ -264,19 +421,53 @@ export default function Game() {
         setFlippingStatuses([]);
         setCurrentFlipCol(-1);
         setDoneFlipCols(new Set());
+
+        if (guess === answer) {
+          if (prefersReducedMotion()) {
+            queueMicrotask(() => setWinToastVisible(true));
+          } else {
+            setWinBounceRow(completedRowIndex);
+          }
+        }
       }
     }, FLIP_DURATION + FLIP_STAGGER);
 
     return () => clearTimeout(timer);
   }, [currentFlipCol, flippingRow, flippingGuess, flippingStatuses]);
 
-  // Show modal after game ends (slight delay so last flip finishes)
+  // After staggered win bounce, show floating toast (skipped when reduced motion shows toast immediately)
   useEffect(() => {
-    if (gameOver) {
+    if (winBounceRow === null) return;
+    const showDelay =
+      (WORD_LENGTH - 1) * WIN_BOUNCE_STAGGER_MS + WIN_BOUNCE_DURATION_MS;
+    const t = window.setTimeout(() => setWinToastVisible(true), showDelay);
+    return () => clearTimeout(t);
+  }, [winBounceRow]);
+
+  // Toast: visible for WIN_TOAST_VISIBLE_MS, then exit animation and unmount
+  useEffect(() => {
+    if (!winToastVisible || winToastExiting) return;
+    const t = window.setTimeout(() => setWinToastExiting(true), WIN_TOAST_VISIBLE_MS);
+    return () => clearTimeout(t);
+  }, [winToastVisible, winToastExiting]);
+
+  useEffect(() => {
+    if (!winToastExiting) return;
+    const t = window.setTimeout(() => {
+      setWinToastVisible(false);
+      setWinToastExiting(false);
+      setWinBounceRow(null);
+    }, WIN_TOAST_EXIT_MS);
+    return () => clearTimeout(t);
+  }, [winToastExiting]);
+
+  // Show modal after game ends (slight delay so last flip finishes); not if share already dismissed (e.g. reload)
+  useEffect(() => {
+    if (gameOver && !shareDismissed) {
       const t = setTimeout(() => setShowModal(true), 1800);
       return () => clearTimeout(t);
     }
-  }, [gameOver]);
+  }, [gameOver, shareDismissed]);
 
   const handleKey = useCallback((key: string) => {
     if (isAnimating || gameOver) return;
@@ -333,17 +524,22 @@ export default function Game() {
 
         {/* Validation only — positioned out of flow so the grid does not jump */}
         <div className="game-validation-layer" aria-live="polite">
-          {(message || (won && !shareDismissed)) && (
-            <div
-              className={`game-validation-toast${won && !shareDismissed ? " game-validation-toast--celebration" : ""}`}
-            >
-              {won && !shareDismissed ? "🎉 Brilliant!" : message}
-            </div>
-          )}
+          {message ? (
+            <div className="game-validation-toast">{message}</div>
+          ) : null}
         </div>
 
-        {/* GRID */}
-        <div className="game-grid">
+        {/* GRID + win toast (toast absolutely positioned; no layout shift) */}
+        <div className="game-grid-wrap">
+          {(winToastVisible || winToastExiting) && (
+            <div
+              className={`game-win-toast${winToastExiting ? " game-win-toast--exit" : ""}`}
+              role="status"
+            >
+              Genius
+            </div>
+          )}
+          <div className="game-grid">
           {Array.from({ length: MAX_GUESSES }).map((_, rowIndex) => {
             const isCommitted    = rowIndex < guesses.length;
             const isCurrent      = !isAnimating && rowIndex === guesses.length;
@@ -366,6 +562,9 @@ export default function Game() {
                     bgColor     = STATUS_COLOR[statuses[rowIndex][colIndex]];
                     borderColor = bgColor;
                     textColor   = "#fff";
+                    if (winBounceRow === rowIndex) {
+                      tileClass = "tile game-tile game-tile--win-bounce";
+                    }
 
                   } else if (isThisFlipping) {
                     letter = flippingGuess[colIndex] || "";
@@ -400,6 +599,9 @@ export default function Game() {
                                            ? STATUS_COLOR[flippingStatuses[colIndex]] : "#fff",
                         "--tile-border": isThisFlipping && flippingStatuses[colIndex]
                                            ? STATUS_COLOR[flippingStatuses[colIndex]] : "#888",
+                        ...(winBounceRow === rowIndex && isCommitted
+                          ? { "--win-bounce-index": String(colIndex) }
+                          : {}),
                       } as React.CSSProperties & Record<string, string>}
                     >
                       {letter}
@@ -409,26 +611,46 @@ export default function Game() {
               </div>
             );
           })}
+          </div>
         </div>
 
-        {(showProgressiveHints || showAnswerReveal) && (
-          <div
-            className={`game-hint-card${showAnswerReveal ? " game-hint-card--reveal" : ""}`}
-            role="status"
-          >
-            {showAnswerReveal ? (
-              <>
-                <p className="game-hint-card__label">Answer</p>
-                <p className="game-hint-card__text">{displayRevealName}</p>
-              </>
-            ) : (
-              <>
-                <p className="game-hint-card__label">{currentHint.label}</p>
-                <p className="game-hint-card__text">{currentHint.text}</p>
-              </>
-            )}
-          </div>
-        )}
+        <div
+          className={`game-hint-slot${showHintSlot ? " game-hint-slot--active" : ""}`}
+          aria-live="polite"
+        >
+          {showHintSlot ? (
+            <div
+              className={`game-hint-card${showAnswerReveal ? " game-hint-card--reveal" : ""}`}
+              role="status"
+            >
+              {showAnswerReveal ? (
+                <div
+                  key={hintContentKey}
+                  className="game-hint-card__content game-hint-card__content--enter"
+                >
+                  <p className="game-hint-card__label">Answer</p>
+                  <p className="game-hint-card__text">{displayRevealName}</p>
+                </div>
+              ) : showInitialTriviaHint ? (
+                <div
+                  key={hintContentKey}
+                  className="game-hint-card__content game-hint-card__content--enter"
+                >
+                  <p className="game-hint-card__label">Trivia</p>
+                  <p className="game-hint-card__text">{targetPlayer.hint.trivia}</p>
+                </div>
+              ) : (
+                <div
+                  key={hintContentKey}
+                  className="game-hint-card__content game-hint-card__content--enter"
+                >
+                  <p className="game-hint-card__label">{currentHint.label}</p>
+                  <p className="game-hint-card__text">{currentHint.text}</p>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
 
         {/* KEYBOARD */}
         <div className="game-keyboard">
@@ -465,15 +687,8 @@ export default function Game() {
 
         <div className="game-keyboard-footnote" role="note">
           <p className="game-keyboard-footnote__general">
-            Some player names are shortened to fit five letters.
+            Some player names are shortened to fit 5 letters. Example: RONALDO - RONAL
           </p>
-          {targetPlayer.meta?.shortened === true ? (
-            <p className="game-keyboard-footnote__today">
-              <span className="game-keyboard-footnote__full">
-                Example: a five-letter answer may be a shortened surname (e.g. &quot;RONAL&quot; for a longer spelling).
-              </span>
-            </p>
-          ) : null}
         </div>
 
         {/* Manual share button after game ends (before modal auto-opens) */}
@@ -497,6 +712,8 @@ export default function Game() {
         )}
       </div>
 
+      <HowToPlayModal open={showHowToPlay} onClose={dismissHowToPlay} />
+
       {/* Share modal */}
       {showModal && (
         <ShareModal
@@ -507,6 +724,7 @@ export default function Game() {
           onClose={() => {
             setShowModal(false);
             setShareDismissed(true);
+            persistShareDismissed(PLAYER_TO_GUESS);
           }}
         />
       )}
