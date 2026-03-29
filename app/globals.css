@@ -1,0 +1,1058 @@
+/* RESET */
+* { box-sizing: border-box; padding: 0; margin: 0; }
+
+:root {
+  /* Tiles — mobile first */
+  --tile-size: 44px;
+  --tile-gap: 4px;
+  --tile-font: 1.125rem;
+  --tile-border-width: 2px;
+  /* Keyboard */
+  --keyboard-gap: 3px;
+  --keyboard-row-gap: 6px;
+  --key-height: 44px;
+  --key-font: 0.7rem;
+  --key-radius: 4px;
+  --keyboard-max-width: 100%;
+}
+
+@media (min-width: 480px) {
+  :root {
+    --tile-size: 50px;
+    --tile-gap: 5px;
+    --tile-font: 1.25rem;
+    --keyboard-gap: 4px;
+    --keyboard-row-gap: 7px;
+    --key-height: 50px;
+    --key-font: 0.8rem;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --tile-size: 54px;
+    --keyboard-gap: 4px;
+    --key-height: 54px;
+    --key-font: 0.85rem;
+    /* Same cap as desktop — full tablet width makes keys overly wide */
+    --keyboard-max-width: 500px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --tile-size: 55px;
+    --tile-font: 1.375rem;
+    --keyboard-gap: 5px;
+    --keyboard-row-gap: 8px;
+    --key-height: 58px;
+    --key-font: 0.875rem;
+    --key-radius: 6px;
+    --keyboard-max-width: 500px;
+  }
+}
+
+/* Narrow phones: larger grid + key tap targets */
+@media (max-width: 425px) {
+  :root {
+    --tile-size: 54px;
+    --tile-gap: 5px;
+    --tile-font: 1.25rem;
+    --keyboard-gap: 4px;
+    --keyboard-row-gap: 9px;
+    --key-height: 56px;
+    --key-font: 0.8rem;
+    --key-radius: 5px;
+  }
+
+  .game-grid {
+    margin-bottom: 4px;
+  }
+}
+
+body {
+  background-color: #ffffff;
+  padding : 0px !important;
+  color: #000;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  /* Safety net if any child still overflows horizontally */
+  overflow-x: hidden;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+/*
+  Phones only (max 767px — excludes iPad at 768px+):
+  Full viewport flex chain so margin-top: auto on .game-keyboard pins keys to the bottom.
+  Placed after base `main` so min-height: 0 wins over min-height: 100dvh here.
+*/
+@media (max-width: 767px) {
+  html {
+    min-height: 100dvh;
+  }
+
+  body {
+    min-height: 100dvh;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .game-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .game-keyboard {
+    margin-top: auto;
+    padding-top: 8px;
+    padding-bottom: 0;
+  }
+}
+
+.tile { user-select: none; }
+
+/*
+  scaleY flip animation:
+  - 0%â†’49%:  tile squishes down (scaleY 1â†’0), white background, black letter
+  - 50%:     tile is invisible (scaleY=0), instantly swap to colored bg + white text
+  - 50%â†’100%: tile expands back up revealing the colored tile with the letter inside
+  
+  The letter stays inside the tile the whole time â€” it just squishes and expands with it.
+  JS only switches the tile from "flipping" class to static color AFTER the full 500ms,
+  so the animation never gets cancelled mid-way.
+*/
+@keyframes tileFlip {
+  0%   { transform: scaleY(1); background-color: #fff;            color: #000; border-color: #888; }
+  49%  { transform: scaleY(0); background-color: #fff;            color: #000; border-color: #888; }
+  50%  { transform: scaleY(0); background-color: var(--tile-bg);  color: #fff; border-color: var(--tile-border); }
+  100% { transform: scaleY(1); background-color: var(--tile-bg);  color: #fff; border-color: var(--tile-border); }
+}
+
+.tile.flipping {
+  animation: tileFlip 0.5s ease forwards;
+}
+
+/* POP â€” bounce when a letter is typed */
+@keyframes pop {
+  0%   { transform: scale(1);   }
+  50%  { transform: scale(1.1); }
+  100% { transform: scale(1);   }
+}
+
+.tile.pop { animation: pop 0.1s ease; }
+
+/* SHAKE â€” invalid guess */
+@keyframes shake {
+  0%,100% { transform: translateX(0);    }
+  20%,60% { transform: translateX(-6px); }
+  40%,80% { transform: translateX(6px);  }
+}
+
+.shake { animation: shake 0.5s ease; }
+
+/* Press feedback — game keys need special handling so middle row keeps scaleY */
+button:not(.game-key):not(.game-key-wide):active {
+  transform: scale(0.95);
+}
+.game-key-wide:active,
+.game-key:active {
+  transform: scale(0.95);
+}
+
+/* Page header — edge-to-edge without 100vw (100vw often causes a horizontal scrollbar) */
+.page-header {
+  --bleed-l: max(12px, env(safe-area-inset-left, 0px));
+  --bleed-r: max(12px, env(safe-area-inset-right, 0px));
+  margin-left: calc(-1 * var(--bleed-l));
+  margin-right: calc(-1 * var(--bleed-r));
+  width: calc(100% + var(--bleed-l) + var(--bleed-r));
+  max-width: none;
+  background: linear-gradient(180deg, #f6f7f8 0%, #fff 48%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.page-title {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  margin: 0 auto;
+  max-width: min(100%, 28rem);
+  padding: 0.85rem max(1rem, env(safe-area-inset-left, 0px)) 0.65rem
+    max(1rem, env(safe-area-inset-right, 0px));
+  font-size: clamp(1.25rem, 4.5vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0d0d0d;
+  line-height: 1.2;
+  border: none;
+}
+
+.page-title-mark {
+  font-size: 1.1em;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
+}
+
+.page-title-text {
+  background: linear-gradient(105deg, #0a3d2e 0%, #1b5e3a 35%, #2e7d4a 70%, #3d8f5a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+
+@supports not (background-clip: text) {
+  .page-title-text {
+    color: #14532d;
+    background: none;
+  }
+}
+
+.page-title-accent {
+  width: 100%;
+  height: 3px;
+  margin: 0;
+  background: linear-gradient(90deg, #134e3a 0%, #2d6a4f 40%, #6aaa64 100%);
+}
+
+/* Game shell */
+.game-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 10px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.game-subtitle {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.game-prizes-notice {
+  margin: 0 0 14px;
+  padding: 0 12px;
+  max-width: 22rem;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #2d6a4f;
+}
+
+.game-keyboard-footnote {
+  width: min(100%, 22rem);
+  margin: 12px auto 0;
+  padding: 0 14px max(10px, env(safe-area-inset-bottom, 0px));
+  text-align: center;
+}
+
+.game-keyboard-footnote__general {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #6b7280;
+}
+
+.game-keyboard-footnote__today {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #374151;
+}
+
+.game-keyboard-footnote__full {
+  font-weight: 700;
+  color: #111827;
+}
+
+.game-hint-card {
+  width: min(100%, 17rem);
+  margin: 2px 10px 6px;
+  padding: 8px 11px 10px;
+  text-align: center;
+  background: linear-gradient(180deg, #f4faf6 0%, #eef5f0 100%);
+  border: 1px solid #c8e0d0;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(19, 78, 58, 0.05),
+    0 3px 10px rgba(19, 78, 58, 0.08);
+}
+
+.game-hint-card__label {
+  margin: 0 0 4px;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #2d6a4f;
+}
+
+.game-hint-card__text {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #14532d;
+}
+
+.game-hint-card--reveal {
+  background: linear-gradient(180deg, #f8f9f8 0%, #eef0ee 100%);
+  border-color: #c5cbc7;
+}
+
+.game-hint-card--reveal .game-hint-card__label {
+  color: #6b7280;
+}
+
+.game-hint-card--reveal .game-hint-card__text {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.next-puzzle-timer-card {
+  width: min(100%, 16rem);
+  margin: 0 auto 12px;
+  padding: 10px 14px 12px;
+  text-align: center;
+  background: linear-gradient(180deg, #fafafa 0%, #f3f4f3 100%);
+  border: 1px solid #e4e6e4;
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(19, 78, 58, 0.08);
+}
+
+.next-puzzle-timer-card__label {
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.next-puzzle-timer-card__time {
+  font-size: clamp(1.2rem, 4.2vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+}
+
+/* Zero-height anchor: toast does not push the grid */
+.game-validation-layer {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.game-validation-toast {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, 0);
+  margin-top: 4px;
+  padding: 3px 13px;
+  border-radius: 4px;
+  background: #111;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
+  max-width: min(92vw, 22rem);
+  white-space: normal;
+  line-height: 1.25;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.game-validation-toast--celebration {
+  background: linear-gradient(135deg, #4ab787 0%, #0c7241 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.35);
+}
+
+.game-grid {
+  display: grid;
+  gap: var(--tile-gap);
+  margin-bottom: 4px;
+}
+
+.game-grid-row {
+  display: flex;
+  gap: var(--tile-gap);
+}
+
+.game-tile {
+  width: var(--tile-size);
+  min-width: 0;
+  height: var(--tile-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--tile-font);
+  font-weight: bold;
+  text-transform: uppercase;
+  border: var(--tile-border-width) solid;
+  box-sizing: border-box;
+}
+
+.game-keyboard {
+  text-align: center;
+  margin-top: 0;
+  margin-inline: auto;
+  padding-top: 6px;
+  width: 100%;
+  max-width: var(--keyboard-max-width);
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.game-keyboard-row {
+  /* One letter width = top row: 10 keys + 9 gaps across full row width */
+  --key-letter: calc((100% - 9 * var(--keyboard-gap)) / 10);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: var(--keyboard-gap);
+  width: 100%;
+  margin-bottom: var(--keyboard-row-gap);
+}
+
+.game-keyboard-row:last-child {
+  margin-bottom: 0;
+}
+
+.game-key,
+.game-key-wide {
+  -webkit-appearance: none;
+  appearance: none;
+  height: var(--key-height);
+  min-height: 0;
+  background: #d3d6da;
+  border: none;
+  border-radius: var(--key-radius);
+  cursor: pointer;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: background 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Letter keys: fixed width from top-row geometry so every row matches Wordle */
+.game-key {
+  flex: 0 0 var(--key-letter);
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 1px;
+  font-size: var(--key-font);
+}
+
+/* ENTER / backspace: 1.5× letter width, same proportion at any viewport */
+.game-key-wide {
+  flex: 0 0 calc(var(--key-letter) * 1.5);
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(var(--key-letter) * 1.5);
+  padding: 0 3px;
+  white-space: nowrap;
+  font-size: clamp(0.5rem, 2.6vw, var(--key-font));
+  letter-spacing: 0.02em;
+}
+
+/* Share modal */
+.share-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+.share-modal-card {
+  position: relative;
+  z-index: 101;
+  width: min(440px, 92vw);
+  max-width: 100%;
+  max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  padding: max(36px, calc(20px + env(safe-area-inset-top, 0px)))
+    max(32px, env(safe-area-inset-right, 0px)) max(28px, calc(16px + env(safe-area-inset-bottom, 0px)))
+    max(32px, env(safe-area-inset-left, 0px));
+  text-align: center;
+  animation: slideUp 0.25s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.share-modal-prizes-notice {
+  font-size: 0.98rem;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #2d6a4f;
+  margin: 0 0 20px;
+}
+
+.share-modal-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #888;
+  line-height: 1;
+  z-index: 1;
+}
+
+.share-modal-emoji-preview {
+  background: #f9f9f9;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 24px;
+  font-size: 20px;
+  line-height: 22px;
+  letter-spacing: 2px;
+  white-space: pre;
+  color: #111;
+}
+
+@media (max-width: 400px) {
+  .share-modal-emoji-preview {
+    font-size: 16px;
+    line-height: 18px;
+    letter-spacing: 1px;
+    padding: 12px;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Legal / static pages (privacy, terms, contact) */
+.legal-page {
+  width: 100%;
+  padding: 1rem max(16px, env(safe-area-inset-left)) 2.5rem
+    max(16px, env(safe-area-inset-right));
+  background: linear-gradient(180deg, #f9faf9 0%, #fff 28%);
+}
+
+.legal-page__inner {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.35rem 1.75rem;
+  background: #fff;
+  border: 1px solid #e8ebe8;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.legal-page__back {
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
+}
+
+.legal-page__back a {
+  color: #3d6b4f;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.legal-page__back a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-page__header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 2px solid #e5efe8;
+}
+
+.legal-page__title {
+  margin: 0 0 0.4rem;
+  font-size: clamp(1.45rem, 4.2vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #0d0d0d;
+  line-height: 1.2;
+}
+
+.legal-page__updated {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.legal-page__intro {
+  margin: 0 0 1.65rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: #2a2a2a;
+}
+
+.legal-page__intro-block {
+  margin: 0 0 1.65rem;
+}
+
+.legal-page__intro-block p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: #2a2a2a;
+}
+
+.legal-page__intro-block p + p {
+  margin-top: 0.65rem;
+}
+
+/* Separate intro from numbered sections and each section from the next */
+.legal-page__intro-block + .legal-page__section {
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5efe8;
+}
+
+.legal-page__section ~ .legal-page__section {
+  padding-top: 1.25rem;
+  border-top: 1px solid #eef2ef;
+}
+
+.legal-page__section {
+  margin-bottom: 1.35rem;
+}
+
+.legal-page__section:last-of-type {
+  margin-bottom: 0;
+}
+
+.legal-page__section h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #14532d;
+  line-height: 1.35;
+}
+
+.legal-page__section p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: #3d3d3d;
+}
+
+.legal-page__section ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #3d3d3d;
+}
+
+.legal-page__section li + li {
+  margin-top: 0.35rem;
+}
+
+.legal-page__contact a {
+  color: #14532d;
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.legal-page__contact a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-page__contact-hero {
+  padding: 1.2rem 1.15rem 1.35rem;
+  background: linear-gradient(180deg, #f4faf6 0%, #f0f7f2 100%);
+  border: 1px solid #e0ebe4;
+  border-radius: 10px;
+}
+
+.legal-page__contact-hero h2 {
+  margin-bottom: 0.45rem;
+}
+
+.legal-page__contact-email {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.8vw, 1.2rem);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.legal-page__contact-email a {
+  word-break: break-all;
+}
+
+.legal-page__contact-hero + .legal-page__intro-block {
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5efe8;
+}
+
+/* Cookie policy — compact purpose list + note */
+.legal-page__purposes {
+  margin: 0 0 1.35rem;
+  padding: 1.15rem 1.2rem 1.3rem;
+  background: linear-gradient(180deg, #f4faf6 0%, #f0f7f2 100%);
+  border: 1px solid #e0ebe4;
+  border-radius: 10px;
+}
+
+.legal-page__purposes h2 {
+  margin: 0 0 0.85rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #14532d;
+  line-height: 1.35;
+}
+
+.legal-page__purposes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legal-page__purposes li {
+  position: relative;
+  padding-left: 1.35rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #3d3d3d;
+}
+
+.legal-page__purposes li + li {
+  margin-top: 0.5rem;
+}
+
+.legal-page__purposes li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3d6b4f;
+}
+
+.legal-page__cookie-note {
+  margin: 0 0 1.35rem;
+  padding: 1rem 1.1rem 1.15rem;
+  border-left: 3px solid #3d6b4f;
+  background: #fafcfb;
+  border-radius: 0 8px 8px 0;
+}
+
+.legal-page__cookie-note h2 {
+  margin: 0 0 0.45rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #14532d;
+  line-height: 1.35;
+}
+
+.legal-page__cookie-note p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: #3d3d3d;
+}
+
+.legal-page__intro-block + .legal-page__purposes {
+  margin-top: 0;
+}
+
+.legal-page__purposes + .legal-page__cookie-note {
+  margin-top: 0;
+}
+
+.legal-page__cookie-note + .legal-page__section {
+  padding-top: 1.25rem;
+  border-top: 1px solid #eef2ef;
+}
+
+/* Cookie consent banner — fixed bottom, slides up on first visit */
+.cookie-banner {
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1rem max(16px, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-right));
+  background: #fafafa;
+  border-top: 1px solid #e0e0e0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.cookie-banner--visible {
+  transform: translateY(0);
+}
+
+.cookie-banner--leaving {
+  transform: translateY(100%);
+}
+
+.cookie-banner__inner {
+  max-width: 56rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem 1.5rem;
+}
+
+.cookie-banner__text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.cookie-banner__title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+}
+
+.cookie-banner__lead {
+  margin: 0 0 0.65rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #2a2a2a;
+}
+
+.cookie-banner__body {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #333;
+}
+
+.cookie-banner__subhead {
+  margin: 0 0 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.cookie-banner__list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.15rem;
+}
+
+.cookie-banner__list li + li {
+  margin-top: 0.2rem;
+}
+
+.cookie-banner__footnote {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #444;
+}
+
+.cookie-banner__footnote a {
+  color: #14532d;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cookie-banner__footnote a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cookie-banner__actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-self: center;
+  min-width: 10.5rem;
+}
+
+.cookie-banner__btn {
+  margin: 0;
+  padding: 0.55rem 1.15rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: inherit;
+  line-height: 1.25;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.cookie-banner__btn:active {
+  transform: scale(0.98);
+}
+
+.cookie-banner__btn--primary {
+  background: #111;
+  color: #fff;
+}
+
+.cookie-banner__btn--primary:hover {
+  opacity: 0.92;
+}
+
+.cookie-banner__btn--primary:focus-visible {
+  outline: 2px solid #14532d;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .cookie-banner__inner {
+    flex-direction: column;
+  }
+
+  .cookie-banner__actions {
+    width: 100%;
+    min-width: unset;
+    align-self: stretch;
+  }
+
+  .cookie-banner__btn {
+    width: 100%;
+  }
+}
+
+/* Site footer — legal / contact */
+.site-footer {
+  margin-top: 2.5rem;
+  padding: 1.25rem max(12px, env(safe-area-inset-left))
+    max(1rem, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-right));
+  border-top: 1px solid #e8e8e8;
+  background: linear-gradient(to bottom, #fafafa 0%, #fff 100%);
+}
+
+.site-footer-nav {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.site-footer-links {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.site-footer-links li {
+  display: inline-flex;
+  align-items: center;
+}
+
+.site-footer-links li:not(:last-child)::after {
+  content: "·";
+  margin: 0 0.65rem;
+  color: #c4c4c4;
+  font-weight: 300;
+  user-select: none;
+}
+
+.site-footer-links a {
+  color: #5c5c5c;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.site-footer-links a:hover {
+  color: #111;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 380px) {
+  .site-footer-links {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .site-footer-links li:not(:last-child)::after {
+    display: none;
+  }
+}
