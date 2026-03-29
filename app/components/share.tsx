@@ -27,21 +27,20 @@ export default function ShareModal({ won, answer, guessCount, statuses, onClose 
     .map(row => row.map(s => STATUS_EMOJI[s]).join(""))
     .join("\n");
 
-  // ✅ Your site link — change this to your actual domain
-  const siteLink = "http://localhost:3001";
-
-  const shareText = [
-    "⚽ FIFA Wordle",
-    won ? `${guessCount}/6` : "X/6",
-    "",
-    emojiGrid,
-    "",
-    siteLink,
-    "",
-    PRIZES_NOTICE,
-  ].join("\n");
-
   const handleCopy = () => {
+    const siteLink = window.location.href;
+
+    const shareText = [
+      "⚽ FIFA Wordle",
+      won ? `${guessCount}/6` : "X/6",
+      "",
+      emojiGrid,
+      "",
+      siteLink,
+      "",
+      PRIZES_NOTICE,
+    ].join("\n");
+
     navigator.clipboard.writeText(shareText).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
