@@ -125,7 +125,7 @@ function parseGuessObject(raw: string, targetAnswer: string): { guesses: string[
 function readStoredGuesses(puzzleId: string, targetAnswer: string): { guesses: string[]; statuses: string[][] } | null {
   if (typeof window === "undefined") return null;
   try {
-    if (localStorage.getItem(LS_USER_HAS_PLAYED_KEY) !== "no") return null;
+    if (localStorage.getItem(LS_USER_HAS_PLAYED_KEY) !== "yes") return null;
     const storedPuzzleId = localStorage.getItem(LS_PUZZLE_ID_KEY);
     if (storedPuzzleId != null && storedPuzzleId !== "") {
       if (storedPuzzleId !== puzzleId) return null;

@@ -188,45 +188,22 @@ button:not(.game-key):not(.game-key-wide):active {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
-.page-title {
+.page-title-logo-wrap {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.4em;
   margin: 0 auto;
-  max-width: min(100%, 28rem);
-  padding: 0.85rem max(1rem, env(safe-area-inset-left, 0px)) 0.65rem
+  max-width: min(100%, 20rem);
+  padding: 0.5rem max(1rem, env(safe-area-inset-left, 0px)) 0.35rem
     max(1rem, env(safe-area-inset-right, 0px));
-  font-size: clamp(1.25rem, 4.5vw, 1.85rem);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #0d0d0d;
-  line-height: 1.2;
   border: none;
 }
 
-.page-title-mark {
-  font-size: 1.1em;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08));
-}
-
-.page-title-text {
-  background: linear-gradient(105deg, #0a3d2e 0%, #1b5e3a 35%, #2e7d4a 70%, #3d8f5a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: none;
-}
-
-@supports not (background-clip: text) {
-  .page-title-text {
-    color: #14532d;
-    background: none;
-  }
+.page-title-logo {
+  width: 100%;
+  height: auto;
+  max-height: clamp(48px, 14vw, 88px);
+  object-fit: contain;
 }
 
 .page-title-accent {
