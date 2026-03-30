@@ -2,13 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
+import LeftSidebar from "./left-sidebar";
+import { dispatchOpenHowToPlay } from "./how-to-play-open";
 
-export const OPEN_HOW_TO_PLAY_EVENT = "fifa-wordle-open-how-to-play";
-
-export function dispatchOpenHowToPlay() {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(OPEN_HOW_TO_PLAY_EVENT));
-}
+export { OPEN_HOW_TO_PLAY_EVENT, dispatchOpenHowToPlay } from "./how-to-play-open";
 
 type PageHeaderProps = {
   /** When false, only the logo and accent bar (matches legal/static pages). */
@@ -16,6 +14,8 @@ type PageHeaderProps = {
 };
 
 export default function PageHeader({ showHowToPlay = true }: PageHeaderProps) {
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
+
   const logo = (
     <Image
       className="page-title-logo"
@@ -29,9 +29,32 @@ export default function PageHeader({ showHowToPlay = true }: PageHeaderProps) {
   );
 
   return (
-    <header className="page-header">
+    <header
+      className={showHowToPlay ? "page-header page-header--game" : "page-header"}
+    >
       <div className="page-header-bar">
-        <div className="page-header-bar__side" aria-hidden />
+        <div className="page-header-bar__side page-header-bar__side--start">
+          <button
+            type="button"
+            className="page-header-icon-btn page-header-menu-btn"
+            aria-label="Open menu"
+            aria-expanded={leftSidebarOpen}
+            aria-controls="left-sidebar-panel"
+            onClick={() => setLeftSidebarOpen(true)}
+          >
+            <svg
+              className="page-header-icon-btn__glyph"
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden
+            >
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
         {showHowToPlay ? (
           <h1 className="page-title-logo-wrap">{logo}</h1>
         ) : (
@@ -172,6 +195,11 @@ export default function PageHeader({ showHowToPlay = true }: PageHeaderProps) {
         </div>
       </div>
       <div className="page-title-accent" aria-hidden="true" />
+      <LeftSidebar
+        open={leftSidebarOpen}
+        onClose={() => setLeftSidebarOpen(false)}
+        showHowToPlay={showHowToPlay}
+      />
     </header>
   );
 }

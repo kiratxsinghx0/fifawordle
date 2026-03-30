@@ -716,18 +716,9 @@ export default function Game() {
         {/* Manual share button after game ends (before modal auto-opens) */}
         {gameOver && !showModal && (
           <button
+            type="button"
+            className="game-share-fallback"
             onClick={() => setShowModal(true)}
-            style={{
-              marginTop: "20px",
-              padding: "12px 32px",
-              background: "#538d4e",
-              color: "#fff",
-              border: "none",
-              borderRadius: "32px",
-              fontSize: "1rem",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
           >
             Share ↗
           </button>
