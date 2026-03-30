@@ -1,5 +1,4 @@
 import type { Viewport } from "next";
-import Link from "next/link";
 import { CookieBanner } from "./components/cookie-banner";
 import "./globals.css";
 
@@ -39,25 +38,6 @@ export default function RootLayout({
         {children}
 
         <CookieBanner />
-
-        <footer className="site-footer">
-          <nav className="site-footer-nav" aria-label="Legal and contact">
-            <ul className="site-footer-links">
-              <li>
-                <Link href="/privacy">Privacy Policy</Link>
-              </li>
-              <li>
-                <Link href="/terms">Terms of Service</Link>
-              </li>
-              <li>
-                <Link href="/cookies">Cookie Policy</Link>
-              </li>
-              <li>
-                <Link href="/contact">Contact</Link>
-              </li>
-            </ul>
-          </nav>
-        </footer>
       </body>
     </html>
   );

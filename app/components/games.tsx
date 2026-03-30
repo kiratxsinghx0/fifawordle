@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import ShareModal from "./share";
 import HowToPlayModal from "./how-to-play-modal";
 import { OPEN_HOW_TO_PLAY_EVENT } from "./page-header";
@@ -267,7 +267,28 @@ function letterStatusFromRows(guessRows: string[], statusRows: string[][]): Reco
   return next;
 }
 
+/** Matches globals.css `.game-shell--xs|sm|md` — tighter shell on smaller phones, more padding on larger (≤480px). */
+function gameShellViewportClassSnapshot(): "" | "game-shell--xs" | "game-shell--sm" | "game-shell--md" {
+  if (typeof window === "undefined") return "";
+  const w = window.innerWidth;
+  if (w <= 360) return "game-shell--xs";
+  if (w <= 400) return "game-shell--sm";
+  if (w <= 480) return "game-shell--md";
+  return "";
+}
+
+function subscribeGameShellViewport(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("resize", onChange, { passive: true });
+  return () => window.removeEventListener("resize", onChange);
+}
+
+function useGameShellViewportClass(): string {
+  return useSyncExternalStore(subscribeGameShellViewport, gameShellViewportClassSnapshot, () => "");
+}
+
 export default function Game() {
+  const shellVpClass = useGameShellViewportClass();
   const [currentInput,  setCurrentInput]  = useState("");
   const [guesses,       setGuesses]       = useState<string[]>([]);
   const [statuses,      setStatuses]      = useState<string[][]>([]);
@@ -515,12 +536,13 @@ export default function Game() {
 
   return (
     <>
-      <div className="game-shell">
+      <div className={shellVpClass ? `game-shell ${shellVpClass}` : "game-shell"}>
 
-        <p className="game-subtitle">Guess the player</p>
-        <p className="game-prizes-notice">{PRIZES_NOTICE}</p>
-
-        {gameOver && shareDismissed ? <NextPuzzleTimer /> : null}
+        <div className="game-shell__top">
+          <p className="game-subtitle">Guess the player</p>
+          <p className="game-prizes-notice">{PRIZES_NOTICE}</p>
+          {gameOver && shareDismissed ? <NextPuzzleTimer /> : null}
+        </div>
 
         {/* Validation only — positioned out of flow so the grid does not jump */}
         <div className="game-validation-layer" aria-live="polite">
