@@ -94,7 +94,7 @@ html {
 
 body {
   background-color: #ffffff;
-  padding : 0px !important;
+
   color: #000;
   padding-top: max(12px, env(safe-area-inset-top, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
