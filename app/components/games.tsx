@@ -9,7 +9,7 @@ import { players } from "./players";
 
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
-const PRIZES_NOTICE = "You can win prizes in upcoming Wordles series games.";
+const PRIZES_NOTICE = "You can win prizes in upcoming Wordle games.";
 type PlayerHint = {
   age: number;
   club: string;
