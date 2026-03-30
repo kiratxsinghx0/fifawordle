@@ -7,13 +7,16 @@
   --tile-gap: 4px;
   --tile-font: 1.125rem;
   --tile-border-width: 2px;
-  /* Keyboard */
+  /* Keyboard (NYT-style tokens: height + horizontal inset) */
   --keyboard-gap: 3px;
   --keyboard-row-gap: 6px;
   --key-height: 44px;
   --key-font: 0.7rem;
   --key-radius: 4px;
   --keyboard-max-width: 100%;
+  /* Minimal side inset so keys use almost full width (like native keyboards) */
+  --horizontal-spacing-1: 4px;
+  --keyboard-height: calc(3 * var(--key-height) + 2 * var(--keyboard-row-gap));
 }
 
 @media (min-width: 480px) {
@@ -77,6 +80,7 @@
     --key-height: clamp(32px, var(--tile-size), 58px);
     --key-font: clamp(0.62rem, calc(0.7rem * var(--tile-size) / 44px), 0.85rem);
     --key-radius: clamp(4px, calc(var(--tile-size) * 0.11), 6px);
+    --horizontal-spacing-1: 0px;
   }
 
   .game-grid {
@@ -526,17 +530,26 @@ a.page-header-icon-btn {
   color: #2d6a4f;
 }
 
+/* Below keypad on laptop/tablet; hidden on phones (see `.game-hint-footnote`). */
 .game-keyboard-footnote {
+  display: none;
   width: min(100%, 22rem);
   margin: 12px auto 0;
   padding: 0 14px max(10px, env(safe-area-inset-bottom, 0px));
   text-align: center;
 }
 
+@media (min-width: 768px) {
+  .game-keyboard-footnote {
+    display: block;
+  }
+}
+
 .game-keyboard-footnote__general {
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.45;
+  font-weight: 400;
   color: #6b7280;
 }
 
@@ -583,6 +596,12 @@ a.page-header-icon-btn {
 .game-hint-slot--active {
   min-height: 4.75rem;
   margin-top: 8px;
+}
+
+@media (max-width: 767px) {
+  .game-hint-slot--active {
+    min-height: 5.85rem;
+  }
 }
 
 /* Tighter gap from hint to keys when a hint is showing */
@@ -663,6 +682,29 @@ a.page-header-icon-btn {
   font-size: 1rem;
   font-weight: 700;
   color: #111827;
+}
+
+/* Below hint card on phones only; laptop uses `.game-keyboard-footnote` under the keypad. */
+.game-hint-footnote {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .game-hint-footnote {
+    display: block;
+    margin: 0;
+    padding: 8px 8px 0;
+    font-size: 0.65rem;
+    line-height: 1.35;
+    text-align: center;
+    color: #6b7280;
+    font-weight: 300;
+  }
+
+  .game-hint-slot--active .game-hint-footnote {
+    padding-top: 0;
+    margin-top: 4px;
+  }
 }
 
 .next-puzzle-timer-card {
@@ -831,27 +873,43 @@ a.page-header-icon-btn {
 }
 
 /*
-  Keyboard: CSS Grid on each row so fr + gap fills exactly 100% (flex + calc
-  often rounds up and overflows; overflow-x on the shell then clips Q / ENTER).
-  Middle row is narrower (9 keys); bottom uses 1.5fr + 7×1fr + 1.5fr = 10 units like the top row.
+  Keyboard — full width of game column (not capped to tile grid); minimal side margins.
+  stretch = use full cross-axis width inside .game-shell (align-items: center would shrink children).
 */
 .game-keyboard {
   text-align: center;
   margin-top: 0;
-  /* center in the column like .game-grid-wrap; stretch + max-width left the 500px cap hugging flex-start */
-  align-self: center;
-  margin-inline: auto;
-  padding-top: 6px;
-  padding-inline: clamp(8px, 2.6vw, 14px);
+  align-self: stretch;
   width: 100%;
-  max-width: min(var(--keyboard-max-width), 100%);
+  max-width: 100%;
+  margin-inline: 0;
+  padding-top: 6px;
+  padding-inline: max(0px, var(--horizontal-spacing-1));
   min-width: 0;
+  min-height: var(--keyboard-height);
   box-sizing: border-box;
+  overflow-x: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@media (max-width: 767px) {
+  .game-keyboard {
+    /* Edge-to-edge in the game column; only notch/home-indicator insets */
+    padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+    padding-top: 8px;
+  }
+}
+
+@media (min-width: 768px) {
+  .game-keyboard {
+    max-width: min(var(--keyboard-max-width), 100%);
+    margin-inline: auto;
+    padding-inline: max(var(--horizontal-spacing-1), 8px);
+  }
 }
 
 .game-keyboard-row {
-  display: grid;
-  gap: var(--keyboard-gap);
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -859,47 +917,42 @@ a.page-header-icon-btn {
   box-sizing: border-box;
 }
 
-/* Top: 10 equal tracks — same total width as bottom row’s 10 fr-units */
-.game-keyboard-row:first-child {
+/* Top: 10 equal columns */
+.game-keyboard-row--top {
+  display: grid;
+  gap: var(--keyboard-gap);
   grid-template-columns: repeat(10, minmax(0, 1fr));
 }
 
 /*
-  Middle: 9 keys, same per-key width as top row; row width = 9×letter + 8 gaps.
-  Centered (Wordle-style); grid avoids flex rounding overflow.
+  Middle: half-key spacers + 9 keys (same total flex width as top row’s 10 keys)
 */
-.game-keyboard-row:nth-child(2) {
-  grid-template-columns: repeat(9, minmax(0, 1fr));
-  width: calc((9 * (100% - 9 * var(--keyboard-gap)) / 10) + 8 * var(--keyboard-gap));
-  max-width: 100%;
-  margin-inline: auto;
-}
-
-/*
-  Bottom: same key widths as top (--key-letter). Flex sum is (100% − one gap), not 100%,
-  so it does not overflow; fr+gap on the top row was mismatched to 8 gaps here.
-*/
-.game-keyboard-row:last-child {
-  --key-letter: calc((100% - 9 * var(--keyboard-gap)) / 10);
+.game-keyboard-row--middle {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: center;
   align-items: stretch;
   gap: var(--keyboard-gap);
-  width: 100%;
-  min-width: 0;
-  margin-bottom: 0;
 }
 
-.game-keyboard-row:last-child .game-key {
-  flex: 0 1 var(--key-letter);
+.game-keyboard-spacer {
+  flex: 0.5 0 0;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.game-keyboard-row--middle .game-key {
+  flex: 1 1 0;
+  min-width: 0;
   width: auto;
   max-width: none;
 }
 
-.game-keyboard-row:last-child .game-key-wide {
-  flex: 0 1 calc(var(--key-letter) * 1.5);
-  max-width: none;
+/* Bottom: Enter + 7 letters + ⌫ */
+.game-keyboard-row--bottom {
+  display: grid;
+  gap: var(--keyboard-gap);
+  grid-template-columns: 1.5fr repeat(7, minmax(0, 1fr)) 1.5fr;
+  margin-bottom: 0;
 }
 
 .game-key,

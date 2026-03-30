@@ -672,39 +672,72 @@ export default function Game() {
               )}
             </div>
           ) : null}
+          <p className="game-hint-footnote">
+            Some player names are shortened to fit 5 letters. Example: RONALDO - RONAL
+          </p>
         </div>
 
-        {/* KEYBOARD */}
-        <div className="game-keyboard">
-          {["qwertyuiop","asdfghjkl","zxcvbnm"].map((row, i) => (
-            <div key={i} className="game-keyboard-row">
-              {i === 2 && (
-                <button type="button" className="game-key-wide" onClick={() => handleKey("Enter")}>
-                  ENTER
+        {/* KEYBOARD — structure aligned with NYT Wordle (row + half-key spacers on middle row) */}
+        <div className="game-keyboard" role="group" aria-label="Keyboard">
+          <div className="game-keyboard-row game-keyboard-row--top">
+            {"qwertyuiop".split("").map(l => {
+              const s  = letterStatus[l];
+              const bg = s === "correct" ? "#6aaa64" : s === "present" ? "#c9b458" : s === "absent" ? "#787c7e" : "#d3d6da";
+              return (
+                <button
+                  key={l}
+                  type="button"
+                  className="game-key"
+                  onClick={() => handleKey(l)}
+                  style={{ background: bg, color: s ? "#fff" : "#000" }}
+                >
+                  {l.toUpperCase()}
                 </button>
-              )}
-              {row.split("").map(l => {
-                const s  = letterStatus[l];
-                const bg = s === "correct" ? "#6aaa64" : s === "present" ? "#c9b458" : s === "absent" ? "#787c7e" : "#d3d6da";
-                return (
-                  <button
-                    key={l}
-                    type="button"
-                    className="game-key"
-                    onClick={() => handleKey(l)}
-                    style={{ background: bg, color: s ? "#fff" : "#000" }}
-                  >
-                    {l.toUpperCase()}
-                  </button>
-                );
-              })}
-              {i === 2 && (
-                <button type="button" className="game-key-wide" onClick={() => handleKey("Backspace")}>
-                  ⌫
+              );
+            })}
+          </div>
+          <div className="game-keyboard-row game-keyboard-row--middle">
+            <div className="game-keyboard-spacer" aria-hidden="true" />
+            {"asdfghjkl".split("").map(l => {
+              const s  = letterStatus[l];
+              const bg = s === "correct" ? "#6aaa64" : s === "present" ? "#c9b458" : s === "absent" ? "#787c7e" : "#d3d6da";
+              return (
+                <button
+                  key={l}
+                  type="button"
+                  className="game-key"
+                  onClick={() => handleKey(l)}
+                  style={{ background: bg, color: s ? "#fff" : "#000" }}
+                >
+                  {l.toUpperCase()}
                 </button>
-              )}
-            </div>
-          ))}
+              );
+            })}
+            <div className="game-keyboard-spacer" aria-hidden="true" />
+          </div>
+          <div className="game-keyboard-row game-keyboard-row--bottom">
+            <button type="button" className="game-key game-key-wide" onClick={() => handleKey("Enter")}>
+              ENTER
+            </button>
+            {"zxcvbnm".split("").map(l => {
+              const s  = letterStatus[l];
+              const bg = s === "correct" ? "#6aaa64" : s === "present" ? "#c9b458" : s === "absent" ? "#787c7e" : "#d3d6da";
+              return (
+                <button
+                  key={l}
+                  type="button"
+                  className="game-key"
+                  onClick={() => handleKey(l)}
+                  style={{ background: bg, color: s ? "#fff" : "#000" }}
+                >
+                  {l.toUpperCase()}
+                </button>
+              );
+            })}
+            <button type="button" className="game-key game-key-wide" onClick={() => handleKey("Backspace")}>
+              ⌫
+            </button>
+          </div>
         </div>
 
         <div className="game-keyboard-footnote" role="note">
