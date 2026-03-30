@@ -72,7 +72,7 @@ function resolvePlayerByName(token: string): PlayerRow {
 /**
  * Player users must guess — set this to the five-letter `name` from `players.ts` (any case).
  */
-const PLAYER_TO_GUESS = "MESSI";
+const PLAYER_TO_GUESS = "MBAPP";
 
 const targetPlayer = resolvePlayerByName(PLAYER_TO_GUESS);
 const answer = targetPlayer.name.toLowerCase();
