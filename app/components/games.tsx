@@ -9,7 +9,7 @@ import { players } from "./players";
 
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
-const PRIZES_NOTICE = "You can win prizes in upcoming Wordle games.";
+const PRIZES_NOTICE = "You can win prizes in upcoming Wordles series games.";
 type PlayerHint = {
   age: number;
   club: string;
@@ -72,7 +72,7 @@ function resolvePlayerByName(token: string): PlayerRow {
 /**
  * Player users must guess — set this to the five-letter `name` from `players.ts` (any case).
  */
-const PLAYER_TO_GUESS = "MBAPP";
+const PLAYER_TO_GUESS = "MESSI";
 
 const targetPlayer = resolvePlayerByName(PLAYER_TO_GUESS);
 const answer = targetPlayer.name.toLowerCase();

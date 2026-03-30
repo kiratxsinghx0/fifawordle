@@ -16,7 +16,7 @@
   --keyboard-max-width: 100%;
   /* Minimal side inset so keys use almost full width (like native keyboards) */
   --horizontal-spacing-1: 4px;
-  --keyboard-height: calc(3 * var(--key-height) + 2 * var(--keyboard-row-gap) + 16px);
+  --keyboard-height: calc(3 * var(--key-height) + 2 * var(--keyboard-row-gap));
 }
 
 @media (min-width: 480px) {
@@ -65,7 +65,7 @@
       26px,
       min(
         calc((100vw - 24px) / 5.35),
-        calc((100dvh - 33rem) / 6.45)
+        calc((100dvh - 29rem) / 6.45)
       ),
       58px
     );
@@ -75,12 +75,11 @@
       calc(1.125rem * var(--tile-size) / 44px),
       1.25rem
     );
-    --keyboard-gap: clamp(3px, 0.9vw, 5px);
-    --keyboard-row-gap: clamp(8px, 1.8vw, 12px);
-    /* Key height is FIXED like a native keyboard — does NOT shrink with tiles */
-    --key-height: clamp(42px, 12.5vw, 56px);
-    --key-font: clamp(0.72rem, 2.8vw, 0.88rem);
-    --key-radius: 6px;
+    --keyboard-gap: clamp(3px, 0.9vw, 4px);
+    --keyboard-row-gap: clamp(5px, 1.2vw, 9px);
+    --key-height: clamp(32px, var(--tile-size), 58px);
+    --key-font: clamp(0.62rem, calc(0.7rem * var(--tile-size) / 44px), 0.85rem);
+    --key-radius: clamp(4px, calc(var(--tile-size) * 0.11), 6px);
     --horizontal-spacing-1: 0px;
   }
 
@@ -95,7 +94,7 @@ html {
 
 body {
   background-color: #ffffff;
-  padding : 0px !important;
+
   color: #000;
   padding-top: max(12px, env(safe-area-inset-top, 0px));
   padding-right: max(12px, env(safe-area-inset-right, 0px));
@@ -899,7 +898,6 @@ a.page-header-icon-btn {
     /* Edge-to-edge in the game column; only notch/home-indicator insets */
     padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
     padding-top: 8px;
-    padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
   }
 }
 
