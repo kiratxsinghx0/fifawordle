@@ -65,7 +65,7 @@
       26px,
       min(
         calc((100vw - 24px) / 5.35),
-        calc((100dvh - 26rem) / 6.45)
+        calc((100dvh - 29rem) / 6.45)
       ),
       58px
     );
@@ -712,20 +712,18 @@ a.page-header-icon-btn {
 @media (max-width: 767px) {
   .game-hint-footnote {
     display: block;
-    margin: 3px 0 0;
-    padding: 0;
-    font-size: clamp(0.6rem, 2.6vw, 0.68rem);
-    line-height: 1.4;
+    margin: 0;
+    padding: 8px 8px 0;
+    font-size: 0.65rem;
+    line-height: 1.35;
     text-align: center;
     color: #6b7280;
-    font-weight: 400;
-    /* Ensure it never wraps past 2 lines */
-    max-width: 100%;
-    white-space: normal;
+    font-weight: 300;
   }
 
   .game-hint-slot--active .game-hint-footnote {
-    margin-top: 3px;
+    padding-top: 0;
+    margin-top: 4px;
   }
 }
 
