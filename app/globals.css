@@ -464,6 +464,11 @@ a.page-header-icon-btn {
   height: clamp(24px, 6vw, 28px);
 }
 
+.page-header-howtoplay-btn .page-header-icon-btn__glyph {
+  width: clamp(24px, 6vw, 28px);
+  height: clamp(24px, 6vw, 28px);
+}
+
 @media (min-width: 640px) {
   .page-header-menu-btn {
     width: 48px;
@@ -513,6 +518,10 @@ a.page-header-icon-btn {
 /* Hint icon in header — green circle with yellow badge */
 .page-header-hint-btn {
   position: relative;
+  width: calc(var(--header-icon-btn) * 0.85);
+  height: calc(var(--header-icon-btn) * 0.85);
+  min-width: calc(var(--header-icon-btn) * 0.85);
+  min-height: calc(var(--header-icon-btn) * 0.85);
   background: linear-gradient(135deg, #2d6a4f 0%, #14532d 100%);
   color: #fff;
   box-shadow: 0 1px 4px rgba(19, 78, 58, 0.25);
@@ -539,10 +548,46 @@ a.page-header-icon-btn {
   pointer-events: none;
 }
 
-/* Phones: on game pages keep only how-to-play in the toolbar (hamburger stays visible) */
-@media (max-width: 767px) {
-  .page-header--game .page-header-toolbar a.page-header-icon-btn {
-    display: none;
+/* Header stopwatch timer */
+.page-header-timer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  margin-left: 6px;
+}
+
+.page-header-timer__icon {
+  color: #555;
+  flex-shrink: 0;
+}
+
+.page-header-timer__time {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+  color: #222;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .page-header-timer {
+    padding: 3px 7px;
+    gap: 3px;
+  }
+
+  .page-header-timer__icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .page-header-timer__time {
+    font-size: 0.72rem;
   }
 }
 
@@ -609,14 +654,14 @@ a.page-header-icon-btn {
 @media (max-width: 767px) {
   .game-subtitle {
     margin: 0 0 2px;
-    font-size: 0.82rem;
+    font-size: 0.92rem;
   }
 }
 
 @media (max-width: 480px) {
   .game-subtitle {
     margin: 0 0 1px;
-    font-size: 0.78rem;
+    font-size: 0.88rem;
   }
 }
 
@@ -867,7 +912,7 @@ a.page-header-icon-btn {
 
 .next-puzzle-timer-card {
   width: min(100%, 16rem);
-  margin: 0 auto 12px;
+  margin: 16px auto 12px;
   padding: 10px 14px 12px;
   text-align: center;
   background: linear-gradient(180deg, #fafafa 0%, #f3f4f3 100%);
@@ -1065,6 +1110,10 @@ a.page-header-icon-btn {
     margin-inline: auto;
     padding-inline: max(var(--horizontal-spacing-1), 8px);
   }
+
+  .game-page__keyboard {
+    padding-bottom: 24px;
+  }
 }
 
 .game-keyboard-row {
@@ -1152,7 +1201,10 @@ a.page-header-icon-btn {
   letter-spacing: 0.02em;
 }
 
-/* Share modal */
+/* ══════════════════════════════════════════════════
+   Share modal — mobile-first result screen
+   ══════════════════════════════════════════════════ */
+
 .share-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1163,113 +1215,581 @@ a.page-header-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: shareBackdropIn 0.3s ease;
+}
+
+@keyframes shareBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .share-modal-card {
   position: relative;
   z-index: 101;
-  width: min(440px, 92vw);
+  width: min(390px, 92vw);
   max-width: 100%;
-  max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
+  max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px));
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
-  padding: max(36px, calc(20px + env(safe-area-inset-top, 0px)))
-    max(32px, env(safe-area-inset-right, 0px)) max(28px, calc(16px + env(safe-area-inset-bottom, 0px)))
-    max(32px, env(safe-area-inset-left, 0px));
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.03),
+    0 24px 80px rgba(0, 0, 0, 0.18),
+    0 4px 16px rgba(0, 0, 0, 0.06);
+  padding: 32px 26px 28px;
   text-align: center;
-  animation: slideUp 0.25s ease;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: shareCardIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+@media (max-width: 400px) {
+  .share-modal-card {
+    padding: 26px 20px 22px;
+    border-radius: 16px;
+  }
+}
+
+@keyframes shareCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Close button */
+.share-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: #bbb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  z-index: 2;
+  padding: 0;
+}
+
+.share-modal-close:hover {
+  background: #f3f3f3;
+  color: #666;
+}
+
+/* ── Header ── */
 .share-modal-header {
   text-align: center;
-  padding-bottom: 16px;
+  padding-bottom: 2px;
+  animation: shareSectionUp 0.5s ease both;
 }
 
-.share-star-icon-outer {
-  width: 64px;
-  height: 64px;
-  background: #a8c5a0;
+.share-star-icon {
+  width: 48px;
+  height: 48px;
+  background: #538d4e;
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 20px;
+  margin: 0 auto 14px;
+  box-shadow: 0 4px 16px rgba(83, 141, 78, 0.3);
+  animation: shareStarPulse 2s ease-in-out 0.6s infinite;
 }
 
-.share-star-icon-inner {
-  width: 44px;
-  height: 44px;
-  background: #4a7c59;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+@keyframes shareStarPulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(83, 141, 78, 0.3); }
+  50%      { box-shadow: 0 4px 24px rgba(83, 141, 78, 0.45); }
 }
 
 .share-modal-title {
-  font-size: 1.9rem;
-  font-weight: 900;
-  margin: 0 0 8px;
-  letter-spacing: -0.5px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.4px;
   color: #111;
-  font-family: "Georgia", "Times New Roman", serif;
+  line-height: 1.2;
 }
 
-.share-modal-main {
-  padding-top: 0;
-}
-
-.share-modal-footer {
-  margin-top: 20px;
-}
-
-.share-modal-prizes-notice {
-  font-size: 0.98rem;
-  line-height: 1.45;
-  font-weight: 600;
-  color: #2d6a4f;
-  margin: 0 0 20px;
-}
-
-.share-modal-close {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top, 0px));
-  right: max(20px, env(safe-area-inset-right, 0px));
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
+.share-modal-subtitle {
+  font-size: 0.88rem;
   color: #888;
+  margin: 3px 0 0;
+  font-weight: 400;
+}
+
+/* ── Hero performance block ── */
+.share-hero {
+  padding: 18px 0 14px;
+  animation: shareSectionUp 0.5s ease 0.08s both;
+}
+
+.share-hero__badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: linear-gradient(135deg, #f0faf0 0%, #e8f5e8 100%);
+  border: 1px solid #d4ead4;
+  border-radius: 40px;
+  padding: 10px 24px;
+}
+
+.share-hero__pct {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #2d6a4f;
+  letter-spacing: -0.5px;
   line-height: 1;
-  z-index: 1;
 }
 
-.share-modal-emoji-preview {
-  background: #f9f9f9;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 24px;
-  font-size: 20px;
-  line-height: 22px;
-  letter-spacing: 2px;
-  white-space: pre;
-  color: #111;
+.share-hero__today {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #6b9b7a;
+  letter-spacing: 0;
 }
 
-@media (max-width: 400px) {
-  .share-modal-emoji-preview {
-    font-size: 16px;
-    line-height: 18px;
-    letter-spacing: 1px;
-    padding: 12px;
+.share-hero__score {
+  font-size: 0.95rem;
+  color: #666;
+  margin: 10px 0 0;
+  font-weight: 400;
+}
+
+.share-hero__score strong {
+  font-weight: 700;
+  color: #333;
+}
+
+.share-hero__time {
+  font-size: 0.9rem;
+  color: #888;
+  margin: 6px 0 0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.share-hero__time-icon {
+  font-size: 0.85rem;
+}
+
+/* ── Loss hero block ── */
+.share-loss-icon {
+  width: 48px;
+  height: 48px;
+  background: #787c7e;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  box-shadow: 0 4px 16px rgba(120, 124, 126, 0.25);
+}
+
+.share-loss-hero {
+  padding: 18px 0 14px;
+  animation: shareSectionUp 0.5s ease 0.08s both;
+}
+
+.share-loss-hero__badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: linear-gradient(135deg, #fef3e6 0%, #fdebd3 100%);
+  border: 1px solid #f5dbb8;
+  border-radius: 40px;
+  padding: 10px 24px;
+}
+
+.share-loss-hero__count {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #b8860b;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.share-loss-hero__label {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #c9a050;
+  letter-spacing: 0;
+}
+
+.share-loss-hero__msg {
+  font-size: 0.95rem;
+  color: #666;
+  margin: 10px 0 0;
+  font-weight: 400;
+}
+
+.share-loss-hero__time {
+  font-size: 0.9rem;
+  color: #888;
+  margin: 6px 0 0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.share-loss-hero__time-icon {
+  font-size: 0.85rem;
+}
+
+/* ── Loss timer ── */
+.share-loss-timer {
+  margin: 0 0 20px;
+  animation: shareSectionUp 0.5s ease 0.22s both;
+}
+
+.share-loss-timer__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #aaa;
+  margin: 0 0 6px;
+  text-align: center;
+}
+
+.share-loss-timer .next-puzzle-timer-card {
+  margin: 0 auto;
+  width: min(100%, 12.5rem);
+  padding: 8px 12px 10px;
+  box-shadow: none;
+  border: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.share-loss-timer .next-puzzle-timer-card__time {
+  font-size: clamp(1rem, 3.5vw, 1.35rem);
+}
+
+.share-loss-timer .next-puzzle-timer-card__label {
+  display: none;
+}
+
+.share-loss-timer .next-puzzle-timer-card::before {
+  content: "Next player in";
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+/* ── Social proof card ── */
+.share-social {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  animation: shareSectionUp 0.5s ease 0.14s both;
+}
+
+.share-social__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.88rem;
+  color: #555;
+  line-height: 1.3;
+}
+
+.share-social__icon {
+  font-size: 0.9rem;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.share-social__row strong {
+  font-weight: 700;
+  color: #222;
+}
+
+/* ── Guess distribution ── */
+.share-dist {
+  margin: 0 0 20px;
+  text-align: left;
+  animation: shareSectionUp 0.5s ease 0.2s both;
+}
+
+.share-dist__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #aaa;
+  margin: 0 0 10px;
+}
+
+.share-dist__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  margin-bottom: 4px;
+  animation: shareSectionUp 0.35s ease both;
+  animation-delay: var(--row-delay, 0ms);
+}
+
+.share-dist__num {
+  width: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #bbb;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.share-dist__track {
+  flex: 1;
+  height: 20px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.share-dist__bar {
+  height: 100%;
+  background: #c4c6c8;
+  border-radius: 4px;
+  min-width: 16px;
+  width: 0;
+  animation: shareBarGrow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--bar-delay, 300ms);
+}
+
+@keyframes shareBarGrow {
+  from { width: 0; }
+  to   { width: var(--bar-w, 0); }
+}
+
+.share-dist__bar--hl {
+  background: #538d4e;
+}
+
+.share-dist__pct {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #bbb;
+  min-width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.share-dist__row--hl .share-dist__num {
+  color: #2d6a4f;
+  font-weight: 800;
+}
+
+.share-dist__row--hl .share-dist__pct {
+  color: #2d6a4f;
+  font-weight: 800;
+}
+
+/* ── Visual emoji grid ── */
+.share-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 14px;
+  animation: shareSectionUp 0.5s ease 0.24s both;
+}
+
+.share-grid__row {
+  display: flex;
+  gap: 4px;
+}
+
+.share-grid__tile {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+@media (max-width: 380px) {
+  .share-grid__tile {
+    width: 28px;
+    height: 28px;
+    border-radius: 3px;
+  }
+
+  .share-grid {
+    gap: 3px;
+  }
+
+  .share-grid__row {
+    gap: 3px;
+  }
+}
+
+/* ── Share preview card (visual tile grid) ── */
+.share-preview-card {
+  background: #f5f5f5;
+  border: 1px solid #efefef;
+  border-radius: 14px;
+  padding: 20px 24px 16px;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  animation: shareSectionUp 0.5s ease 0.28s both;
+}
+
+.share-preview-card__grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.share-preview-card__row {
+  display: flex;
+  gap: 4px;
+}
+
+.share-preview-card__tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.share-preview-card__summary {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  color: #555;
+  margin: 4px 0 0;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+
+.share-preview-card__url {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.85rem;
+  color: #777;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Share button ── */
+.share-modal-share-btn {
+  width: 100%;
+  padding: 15px 24px;
+  background: #538d4e;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 4px 18px rgba(83, 141, 78, 0.28);
+  letter-spacing: 0.02em;
+  animation: shareSectionUp 0.5s ease 0.34s both;
+}
+
+.share-modal-share-btn:hover {
+  background: #4a7c44;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(83, 141, 78, 0.35);
+}
+
+.share-modal-share-btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: 0 2px 8px rgba(83, 141, 78, 0.2);
+}
+
+.share-modal-share-btn--copied {
+  background: #6aaa64;
+  box-shadow: 0 4px 18px rgba(106, 170, 100, 0.3);
+}
+
+.share-modal-share-sub {
+  font-size: 0.75rem;
+  color: #aaa;
+  margin: 8px 0 0;
+  text-align: center;
+  font-weight: 400;
+  animation: shareSectionUp 0.5s ease 0.38s both;
+}
+
+/* ── Prize hook ── */
+.share-prize-hook {
+  font-size: 0.75rem;
+  color: #bbb;
+  text-align: center;
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  line-height: 1.4;
+  animation: shareSectionUp 0.5s ease 0.42s both;
+}
+
+/* ── Shared section entrance animation ── */
+@keyframes shareSectionUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-modal-card,
+  .share-modal-header,
+  .share-hero,
+  .share-social,
+  .share-dist,
+  .share-dist__row,
+  .share-dist__bar,
+  .share-preview-card,
+  .share-modal-share-btn,
+  .share-modal-share-sub,
+  .share-prize-hook,
+  .share-star-icon {
+    animation: none !important;
+  }
+  .share-dist__bar {
+    width: var(--bar-w, 0) !important;
   }
 }
 

@@ -32,6 +32,9 @@ export default function NextPuzzleTimer() {
     const interval = setInterval(() => {
       const remaining = getNextPuzzleTime().getTime() - Date.now();
       setTimeLeft(remaining);
+      if (remaining <= 0) {
+        window.location.reload();
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, []);

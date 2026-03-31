@@ -8,10 +8,10 @@ import { dispatchHintCountUpdate } from "./hint-history-open";
 import { COOKIE_CONSENT_STORAGE_KEY } from "./cookie-banner";
 import NextPuzzleTimer from "./timers";
 import { players } from "./players";
+import puzzleData from "../../current-puzzle.json";
 
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
-const PRIZES_NOTICE = "You can win prizes in upcoming Wordle games.";
 type PlayerHint = {
   age: number;
   club: string;
@@ -71,10 +71,21 @@ function resolvePlayerByName(token: string): PlayerRow {
   return row as PlayerRow;
 }
 
-/**
- * Player users must guess — set this to the five-letter `name` from `players.ts` (any case).
- */
-const PLAYER_TO_GUESS = "MESSI";
+const MAX_GUESSES  = 6;
+const WORD_LENGTH  = 5;
+
+const ENCODE_KEY = "fw26k";
+
+function xorDecode(encoded: string, key: string): string {
+  const raw = atob(encoded);
+  let result = "";
+  for (let i = 0; i < raw.length; i++) {
+    result += String.fromCharCode(raw.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  }
+  return result;
+}
+
+const PLAYER_TO_GUESS = xorDecode(puzzleData.encoded, ENCODE_KEY).toUpperCase();
 
 const targetPlayer = resolvePlayerByName(PLAYER_TO_GUESS);
 const answer = targetPlayer.name.toLowerCase();
@@ -82,9 +93,6 @@ const nameNotice =
   targetPlayer.meta?.shortened === true && targetPlayer.meta.fullName
     ? targetPlayer.meta.fullName
     : null;
-
-const MAX_GUESSES  = 6;
-const WORD_LENGTH  = 5;
 const FLIP_DURATION = 340;
 const FLIP_STAGGER  = 80;
 
@@ -124,8 +132,8 @@ function getLetterStatuses(guess: string, answer: string): string[] {
   return result;
 }
 
-/** Bump when shipping a new daily puzzle so stale guesses/hints do not carry over. */
-const CURRENT_GAME_ID = "1";
+/** Changes when a new puzzle is set via main.js so stale guesses/hints do not carry over. */
+const CURRENT_GAME_ID = String(puzzleData.day);
 const LS_GAME_ID_KEY = "gameId";
 
 const LS_GUESS_KEY = "guess";
@@ -135,6 +143,8 @@ const LS_PUZZLE_ID_KEY = "puzzleId";
 /** When set to the current puzzle id, user closed share — show next-puzzle timer (restored on reload). */
 const LS_SHARE_DISMISSED_PUZZLE_KEY = "fifaWordleShareDismissedPuzzleId";
 const LS_UNLOCKED_HINTS_KEY = "fifaWordleUnlockedHints";
+const LS_TIMER_ELAPSED_KEY = "fifaWordleTimerElapsed";
+const LS_TIMER_STARTED_KEY = "fifaWordleTimerStarted";
 
 const GAME_STORAGE_KEYS = [
   LS_GUESS_KEY,
@@ -142,7 +152,62 @@ const GAME_STORAGE_KEYS = [
   LS_PUZZLE_ID_KEY,
   LS_SHARE_DISMISSED_PUZZLE_KEY,
   LS_UNLOCKED_HINTS_KEY,
+  LS_TIMER_ELAPSED_KEY,
+  LS_TIMER_STARTED_KEY,
 ] as const;
+
+/** ── Persistent stats (survive across puzzles) ── */
+const LS_STATS_KEY = "fifaWordleStats";
+
+export type GameStats = {
+  gamesPlayed: number;
+  gamesWon: number;
+  currentStreak: number;
+  maxStreak: number;
+};
+
+const DEFAULT_STATS: GameStats = { gamesPlayed: 0, gamesWon: 0, currentStreak: 0, maxStreak: 0 };
+
+function readStats(): GameStats {
+  if (typeof window === "undefined") return DEFAULT_STATS;
+  try {
+    const raw = localStorage.getItem(LS_STATS_KEY);
+    if (!raw) return DEFAULT_STATS;
+    return { ...DEFAULT_STATS, ...(JSON.parse(raw) as Partial<GameStats>) };
+  } catch {
+    return DEFAULT_STATS;
+  }
+}
+
+function persistStats(stats: GameStats): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LS_STATS_KEY, JSON.stringify(stats));
+  } catch { /* quota / private mode */ }
+}
+
+/** Key that tracks whether stats were already recorded for a given game id. */
+const LS_STATS_RECORDED_KEY = "fifaWordleStatsRecordedGameId";
+
+function recordGameResult(won: boolean): GameStats {
+  const prev = readStats();
+  const alreadyRecorded =
+    typeof window !== "undefined" &&
+    localStorage.getItem(LS_STATS_RECORDED_KEY) === CURRENT_GAME_ID;
+  if (alreadyRecorded) return prev;
+
+  const next: GameStats = {
+    gamesPlayed: prev.gamesPlayed + 1,
+    gamesWon: prev.gamesWon + (won ? 1 : 0),
+    currentStreak: won ? prev.currentStreak + 1 : 0,
+    maxStreak: won
+      ? Math.max(prev.maxStreak, prev.currentStreak + 1)
+      : prev.maxStreak,
+  };
+  persistStats(next);
+  try { localStorage.setItem(LS_STATS_RECORDED_KEY, CURRENT_GAME_ID); } catch { /* */ }
+  return next;
+}
 
 /**
  * If persisted `gameId` matches `CURRENT_GAME_ID`, keep game data. Otherwise clear game-related keys
@@ -307,6 +372,12 @@ function useGameShellViewportClass(): string {
   return useSyncExternalStore(subscribeGameShellViewport, gameShellViewportClassSnapshot, () => "");
 }
 
+function formatGameTimer(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 export default function Game() {
   const shellVpClass = useGameShellViewportClass();
   const [currentInput,  setCurrentInput]  = useState("");
@@ -321,9 +392,33 @@ export default function Game() {
   const [shareDismissed, setShareDismissed] = useState(false);
   /** Cookie accepted + how to play seen — enables initial trivia before first guess (client-read). */
   const [returningUserHints, setReturningUserHints] = useState(false);
+  const [stats, setStats] = useState<GameStats>(DEFAULT_STATS);
+  const [timerStarted, setTimerStarted] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [cookieConsentDone, setCookieConsentDone] = useState(false);
+  const [howToPlayDone, setHowToPlayDone] = useState(false);
+  const inputLocked = !cookieConsentDone || !howToPlayDone;
 
   useEffect(() => {
     setReturningUserHints(readReturningUserHintEligible());
+    setStats(readStats());
+
+    let consentDone = false;
+    try {
+      const v = localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
+      if (v === "accepted" || v === "rejected") {
+        setCookieConsentDone(true);
+        consentDone = true;
+      }
+    } catch { /* */ }
+
+    try {
+      if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") {
+        setHowToPlayDone(true);
+      } else if (consentDone) {
+        setShowHowToPlay(true);
+      }
+    } catch { /* */ }
   }, []);
 
   const dismissHowToPlay = useCallback(() => {
@@ -336,28 +431,31 @@ export default function Game() {
       /* quota / private mode */
     }
     setShowHowToPlay(false);
+    setHowToPlayDone(true);
     setReturningUserHints(readReturningUserHintEligible());
   }, []);
 
-  /** First visit: show How to play after cookie "Accept all", until dismissed. */
+  /** Mark how-to-play seen on cookie accept so returning-user trivia hint works. */
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const tryOpenHowToPlay = () => {
-      try {
-        if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") return;
-        if (localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY) !== "accepted") return;
-        setShowHowToPlay(true);
-      } catch {
-        /* quota / private mode — don't show without readable consent */
+    try {
+      if (localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY) === "accepted") {
+        localStorage.setItem(LS_HOW_TO_PLAY_SEEN, "true");
       }
-    };
-
-    tryOpenHowToPlay();
+    } catch { /* */ }
 
     const onCookieConsent = (e: Event) => {
-      if ((e as CustomEvent<string>).detail !== "accepted") return;
-      tryOpenHowToPlay();
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail === "accepted" || detail === "rejected") {
+        setCookieConsentDone(true);
+        try {
+          if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) !== "1") {
+            setTimeout(() => setShowHowToPlay(true), 450);
+          }
+        } catch { /* */ }
+      }
+      if (detail !== "accepted") return;
+      try { localStorage.setItem(LS_HOW_TO_PLAY_SEEN, "true"); } catch { /* */ }
       setReturningUserHints(readReturningUserHintEligible());
     };
     window.addEventListener("cookie-consent", onCookieConsent);
@@ -434,6 +532,12 @@ export default function Game() {
   // Restore when userHasPlayed is "yes" (puzzleId only exists after game ends)
   useEffect(() => {
     syncGameIdStorage();
+    try {
+      const savedElapsed = localStorage.getItem(LS_TIMER_ELAPSED_KEY);
+      if (savedElapsed) setElapsedSeconds(parseInt(savedElapsed, 10) || 0);
+      if (localStorage.getItem(LS_TIMER_STARTED_KEY) === "1") setTimerStarted(true);
+    } catch { /* */ }
+
     const loaded = readStoredGuesses(PLAYER_TO_GUESS, answer);
     if (!loaded) return;
     const last = loaded.guesses[loaded.guesses.length - 1];
@@ -447,6 +551,18 @@ export default function Game() {
       if (dismissedShare) setShareDismissed(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (!timerStarted || gameOver) return;
+    const id = setInterval(() => {
+      setElapsedSeconds(prev => {
+        const next = prev + 1;
+        try { localStorage.setItem(LS_TIMER_ELAPSED_KEY, String(next)); } catch { /* */ }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [timerStarted, gameOver]);
 
   // Per-tile flip sequencer
   useEffect(() => {
@@ -482,7 +598,13 @@ export default function Game() {
         setCurrentFlipCol(-1);
         setDoneFlipCols(new Set());
 
-        if (guess === answer && !prefersReducedMotion()) {
+        const justWon = guess === answer;
+        const justLost = !justWon && completedRowIndex + 1 === MAX_GUESSES;
+        if (justWon || justLost) {
+          setStats(recordGameResult(justWon));
+        }
+
+        if (justWon && !prefersReducedMotion()) {
           setWinBounceRow(completedRowIndex);
         }
       }
@@ -509,7 +631,7 @@ export default function Game() {
   }, [gameOver, shareDismissed]);
 
   const handleKey = useCallback((key: string) => {
-    if (isAnimating || gameOver) return;
+    if (inputLocked || isAnimating || gameOver) return;
 
     if (key === "Enter") {
       if (currentInput.length !== WORD_LENGTH) {
@@ -538,9 +660,13 @@ export default function Game() {
     } else if (key === "Backspace") {
       setCurrentInput(prev => prev.slice(0, -1));
     } else if (/^[a-zA-Z]$/.test(key)) {
+      if (!timerStarted) {
+        setTimerStarted(true);
+        try { localStorage.setItem(LS_TIMER_STARTED_KEY, "1"); } catch { /* */ }
+      }
       setCurrentInput(prev => prev.length < WORD_LENGTH ? prev + key.toLowerCase() : prev);
     }
-  }, [currentInput, guesses, isAnimating, gameOver]);
+  }, [currentInput, guesses, isAnimating, gameOver, timerStarted, inputLocked]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
@@ -555,12 +681,11 @@ export default function Game() {
   return (
     <>
       <div className="game-page__content">
-        <PageHeader />
+        <PageHeader timerDisplay={formatGameTimer(elapsedSeconds)} />
         <div className={shellVpClass ? `game-shell ${shellVpClass}` : "game-shell"}>
 
         <div className="game-shell__top">
           <p className="game-subtitle">Guess the player</p>
-          <p className="game-prizes-notice">{PRIZES_NOTICE}</p>
           {gameOver && shareDismissed ? <NextPuzzleTimer /> : null}
         </div>
 
@@ -787,6 +912,8 @@ export default function Game() {
           answer={answer}
           guessCount={guesses.length}
           statuses={statuses}
+          stats={stats}
+          elapsedSeconds={elapsedSeconds}
           onClose={() => {
             setShowModal(false);
             setShareDismissed(true);
