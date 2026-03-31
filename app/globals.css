@@ -3,14 +3,14 @@
 
 :root {
   /* Tiles â€” mobile first */
-  --tile-size: 44px;
-  --tile-gap: 4px;
-  --tile-font: 1.125rem;
+  --tile-size: min(52px, max(28px, calc((100dvh - 30rem) / 6.5)));
+  --tile-gap: 5px;
+  --tile-font: clamp(0.75rem, calc(var(--tile-size) * 0.38), 1.5rem);
   --tile-border-width: 2px;
   /* Keyboard (NYT-style tokens: height + horizontal inset) */
   --keyboard-gap: 3px;
   --keyboard-row-gap: 6px;
-  --key-height: 44px;
+  --key-height: 50px;
   --key-font: 0.7rem;
   --key-radius: 4px;
   --keyboard-max-width: 100%;
@@ -21,21 +21,20 @@
 
 @media (min-width: 480px) {
   :root {
-    --tile-size: 50px;
+    --tile-size: min(52px, max(28px, calc((100dvh - 30rem) / 6.5)));
     --tile-gap: 5px;
-    --tile-font: 1.25rem;
     --keyboard-gap: 4px;
     --keyboard-row-gap: 7px;
-    --key-height: 50px;
+    --key-height: 56px;
     --key-font: 0.8rem;
   }
 }
 
 @media (min-width: 768px) {
   :root {
-    --tile-size: 54px;
+    --tile-size: min(58px, max(30px, calc((100dvh - 31rem) / 6.5)));
     --keyboard-gap: 4px;
-    --key-height: 54px;
+    --key-height: 60px;
     --key-font: 0.85rem;
     /* Same cap as desktop â€” full tablet width makes keys overly wide */
     --keyboard-max-width: 500px;
@@ -44,11 +43,10 @@
 
 @media (min-width: 1024px) {
   :root {
-    --tile-size: 55px;
-    --tile-font: 1.375rem;
+    --tile-size: min(62px, max(32px, calc((100dvh - 32rem) / 6.5)));
     --keyboard-gap: 5px;
     --keyboard-row-gap: 8px;
-    --key-height: 58px;
+    --key-height: 64px;
     --key-font: 0.875rem;
     --key-radius: 6px;
     --keyboard-max-width: 500px;
@@ -57,19 +55,19 @@
 
 /*
   Phones â‰¤480px: tiles sized to fit the viewport with keyboard + hint + footer IN DOCUMENT FLOW
-  (no fixed overlap). ~29rem budgets page header + shell top + active hint + keyboard + footnote + safe areas.
+  (no fixed overlap). ~24rem budgets page header + shell top + active hint + keyboard + footnote + safe areas.
 */
 @media (max-width: 480px) {
   :root {
     --tile-size: clamp(
-      26px,
+      38px,
       min(
-        calc((100vw - 24px) / 5.35),
-        calc((100dvh - 29rem) / 6.45)
+        calc((100vw - 24px) / 5.1),
+        calc((100dvh - 24rem) / 6.2)
       ),
-      58px
+      62px
     );
-    --tile-gap: clamp(3px, 0.8vw, 5px);
+    --tile-gap: clamp(4px, 0.8vw, 6px);
     --tile-font: clamp(
       0.875rem,
       calc(1.125rem * var(--tile-size) / 44px),
@@ -77,7 +75,7 @@
     );
     --keyboard-gap: clamp(3px, 0.9vw, 4px);
     --keyboard-row-gap: clamp(5px, 1.2vw, 9px);
-    --key-height: clamp(32px, var(--tile-size), 58px);
+    --key-height: clamp(44px, 7.5vh, 70px);
     --key-font: clamp(0.62rem, calc(0.7rem * var(--tile-size) / 44px), 0.85rem);
     --key-radius: clamp(4px, calc(var(--tile-size) * 0.11), 6px);
     --horizontal-spacing-1: 0px;
@@ -112,6 +110,33 @@ main {
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+/* Home: viewport column — scrollable game column + fixed keyboard strip */
+.game-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.game-page__content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.game-page__keyboard {
+  flex-shrink: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 /*
@@ -292,8 +317,8 @@ button:not(.game-key):not(.game-key-wide):active {
   --bleed-r: max(12px, env(safe-area-inset-right, 0px));
   --header-bar-pad-y: 0.28rem;
   --header-logo-max-h: clamp(32px, 9.5vw, 52px);
-  --header-icon-btn: clamp(34px, 8.5vw, 40px);
-  --header-icon-glyph: clamp(17px, 4.25vw, 20px);
+  --header-icon-btn: clamp(40px, 10vw, 46px);
+  --header-icon-glyph: clamp(20px, 5vw, 24px);
   margin-left: calc(-1 * var(--bleed-l));
   margin-right: calc(-1 * var(--bleed-r));
   width: calc(100% + var(--bleed-l) + var(--bleed-r));
@@ -408,28 +433,28 @@ a.page-header-icon-btn {
 /* Hamburger: larger hit target + glyph; nudge right from the edge */
 .page-header-menu-btn {
   margin-left: 0.5rem;
-  width: clamp(40px, 10vw, 46px);
-  height: clamp(40px, 10vw, 46px);
-  min-width: clamp(40px, 10vw, 46px);
-  min-height: clamp(40px, 10vw, 46px);
+  width: clamp(42px, 10.5vw, 48px);
+  height: clamp(42px, 10.5vw, 48px);
+  min-width: clamp(42px, 10.5vw, 48px);
+  min-height: clamp(42px, 10.5vw, 48px);
 }
 
 .page-header-menu-btn .page-header-icon-btn__glyph {
-  width: clamp(22px, 5.5vw, 27px);
-  height: clamp(22px, 5.5vw, 27px);
+  width: clamp(24px, 6vw, 28px);
+  height: clamp(24px, 6vw, 28px);
 }
 
 @media (min-width: 640px) {
   .page-header-menu-btn {
-    width: 46px;
-    height: 46px;
-    min-width: 46px;
-    min-height: 46px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
   }
 
   .page-header-menu-btn .page-header-icon-btn__glyph {
-    width: 27px;
-    height: 27px;
+    width: 28px;
+    height: 28px;
   }
 }
 
@@ -460,9 +485,38 @@ a.page-header-icon-btn {
 
 @media (min-width: 640px) {
   .page-header {
-    --header-icon-btn: 40px;
-    --header-icon-glyph: 21px;
+    --header-icon-btn: 46px;
+    --header-icon-glyph: 24px;
   }
+}
+
+/* Hint icon in header — green circle with yellow badge */
+.page-header-hint-btn {
+  position: relative;
+  background: linear-gradient(135deg, #2d6a4f 0%, #14532d 100%);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(19, 78, 58, 0.25);
+}
+
+.page-header-hint-btn:hover {
+  background: linear-gradient(135deg, #3d8b6a 0%, #1a6b3a 100%);
+}
+
+.page-header-hint-badge {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #c9b458;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
 }
 
 /* Phones: on game pages keep only how-to-play in the toolbar (hamburger stays visible) */
@@ -477,7 +531,7 @@ a.page-header-icon-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
@@ -486,6 +540,14 @@ a.page-header-icon-btn {
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+.game-grid-wrap {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /*
@@ -530,19 +592,13 @@ a.page-header-icon-btn {
   color: #2d6a4f;
 }
 
-/* Below keypad on laptop/tablet; hidden on phones (see `.game-hint-footnote`). */
+/* Below keypad on laptop/tablet; phones also show `.game-hint-footnote` in the hint slot. */
 .game-keyboard-footnote {
-  display: none;
+  display: block;
   width: min(100%, 22rem);
   margin: 12px auto 0;
   padding: 0 14px max(10px, env(safe-area-inset-bottom, 0px));
   text-align: center;
-}
-
-@media (min-width: 768px) {
-  .game-keyboard-footnote {
-    display: block;
-  }
 }
 
 .game-keyboard-footnote__general {
@@ -600,12 +656,27 @@ a.page-header-icon-btn {
 @media (max-width: 767px) {
   .game-hint-slot--active {
     min-height: 4.5rem;
-    margin-top: 6px;
+    margin-top: 16px;
+  }
+
+  .game-page__keyboard {
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 4px));
   }
 }
 
-/* Tighter gap from hint to keys when a hint is showing */
-.game-hint-slot--active + .game-keyboard {
+@media (max-width: 767px) {
+  .game-keyboard-footnote {
+    margin-top: 8px;
+  }
+
+  .game-keyboard-footnote__general {
+    font-size: 0.68rem;
+    line-height: 1.35;
+  }
+}
+
+/* Tighter gap from hint to keys when a hint is showing (keyboard no longer adjacent to hint slot) */
+.game-page:has(.game-hint-slot--active) .game-page__keyboard .game-keyboard {
   padding-top: 3px;
 }
 
@@ -1048,6 +1119,49 @@ a.page-header-icon-btn {
   text-align: center;
   animation: slideUp 0.25s ease;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.share-modal-header {
+  text-align: center;
+  padding-bottom: 16px;
+}
+
+.share-star-icon-outer {
+  width: 64px;
+  height: 64px;
+  background: #a8c5a0;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+
+.share-star-icon-inner {
+  width: 44px;
+  height: 44px;
+  background: #4a7c59;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-modal-title {
+  font-size: 1.9rem;
+  font-weight: 900;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+  color: #111;
+  font-family: "Georgia", "Times New Roman", serif;
+}
+
+.share-modal-main {
+  padding-top: 0;
+}
+
+.share-modal-footer {
+  margin-top: 20px;
 }
 
 .share-modal-prizes-notice {
@@ -2153,4 +2267,194 @@ main.how-to-play-page.legal-page article.legal-page__inner {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Hint history modal — smaller than how-to-play */
+.hint-history-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.hint-history-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+  pointer-events: auto;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.hint-history-modal-card {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  width: min(22rem, calc(100vw - 48px));
+  max-width: 100%;
+  max-height: min(70vh, 70dvh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e8ebe8;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  padding: 20px 20px 24px;
+  animation: slideUp 0.3s ease-out;
+}
+
+@media (max-width: 400px) {
+  .hint-history-modal-card {
+    width: min(100%, calc(100vw - 32px));
+    padding: 16px 16px 20px;
+    border-radius: 12px;
+  }
+}
+
+.hint-history-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #888;
+  cursor: pointer;
+}
+
+.hint-history-modal-close:hover {
+  color: #111;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.hint-history-modal-title {
+  margin: 0 0 14px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14532d;
+  text-align: center;
+}
+
+.hint-history-modal-empty {
+  margin: 12px 0 0;
+  font-size: 0.88rem;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.hint-history-modal-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.hint-history-modal-hint-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #f4faf6 0%, #eef5f0 100%);
+  border: 1px solid #d4e8dc;
+  border-radius: 8px;
+}
+
+.hint-history-modal-hint-label {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: #2d6a4f;
+  min-width: 4.5rem;
+}
+
+.hint-history-modal-hint-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #14532d;
+}
+
+.hint-history-modal-hint-text--answer {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.hint-history-modal-answer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #f8f9f8 0%, #eef0ee 100%);
+  border: 1px solid #c5cbc7;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.hint-history-modal-answer .hint-history-modal-hint-label {
+  color: #6b7280;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint-history-modal-card {
+    animation: none;
+  }
+
+  .hint-history-modal-backdrop {
+    animation: none;
+  }
+}
+
+/* ── See Results button (replaces keyboard after game over) ── */
+.game-page__see-results {
+  width: 100%;
+  max-width: 484px;
+  margin: 0 auto;
+  padding: 16px 8px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.see-results-btn {
+  width: 100%;
+  max-width: 320px;
+  padding: 16px 32px;
+  background: #538d4e;
+  color: #fff;
+  border: none;
+  border-radius: 32px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.see-results-btn:hover {
+  background: #6aaa64;
+}
+
+.see-results-btn:active {
+  transform: scale(0.97);
 }
