@@ -98,8 +98,16 @@ body {
   padding-right: max(12px, env(safe-area-inset-right, 0px));
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   padding-left: max(12px, env(safe-area-inset-left, 0px));
-  /* Safety net if any child still overflows horizontally */
   overflow-x: hidden;
+}
+
+@media (max-width: 767px) {
+  body {
+    padding-top: max(4px, env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: max(0px, env(safe-area-inset-bottom, 0px)) !important;
+    padding-left: max(4px, env(safe-area-inset-left, 0px)) !important;
+    padding-right: max(4px, env(safe-area-inset-right, 0px)) !important;
+  }
 }
 
 main {
@@ -182,6 +190,7 @@ main {
     display: flex;
     flex-direction: column;
     align-items: center;
+    padding-top: 0;
   }
 
   .game-grid-wrap {
@@ -193,6 +202,7 @@ main {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
 
   .game-hint-slot {
@@ -325,6 +335,16 @@ button:not(.game-key):not(.game-key-wide):active {
   max-width: none;
   background: linear-gradient(180deg, #f6f7f8 0%, #fff 48%);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .page-header {
+    --header-bar-pad-y: 0.15rem;
+    --header-logo-max-h: clamp(26px, 8vw, 40px);
+    --header-icon-btn: clamp(34px, 9vw, 42px);
+    --header-icon-glyph: clamp(18px, 4.5vw, 22px);
+  }
 }
 
 /* Top row: balanced columns keep the logo centered with a help control on the right */
@@ -542,6 +562,13 @@ a.page-header-icon-btn {
   overflow-x: hidden;
 }
 
+@media (max-width: 767px) {
+  .game-shell {
+    padding-top: 2px;
+    padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
 .game-grid-wrap {
   flex: 1 1 0%;
   min-height: 0;
@@ -557,17 +584,17 @@ a.page-header-icon-btn {
 */
 @media (max-width: 767px) {
   .game-shell.game-shell--xs {
-    padding-top: 4px;
+    padding-top: 1px;
     padding-inline: clamp(0px, 1vw, 4px);
   }
 
   .game-shell.game-shell--sm {
-    padding-top: 6px;
+    padding-top: 2px;
     padding-inline: clamp(0px, 1.5vw, 6px);
   }
 
   .game-shell.game-shell--md {
-    padding-top: 8px;
+    padding-top: 2px;
     padding-inline: clamp(0px, 2vw, 8px);
   }
 }
@@ -577,6 +604,20 @@ a.page-header-icon-btn {
   text-align: center;
   font-size: 0.95rem;
   color: #333;
+}
+
+@media (max-width: 767px) {
+  .game-subtitle {
+    margin: 0 0 2px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-subtitle {
+    margin: 0 0 1px;
+    font-size: 0.78rem;
+  }
 }
 
 .game-prizes-notice {
@@ -590,6 +631,23 @@ a.page-header-icon-btn {
   line-height: 1.45;
   font-weight: 600;
   color: #2d6a4f;
+}
+
+@media (max-width: 767px) {
+  .game-prizes-notice {
+    margin: 0 0 4px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-prizes-notice {
+    margin: 0 0 2px;
+    font-size: 0.68rem;
+    line-height: 1.2;
+  }
 }
 
 /* Below keypad on laptop/tablet; phones also show `.game-hint-footnote` in the hint slot. */
@@ -655,8 +713,8 @@ a.page-header-icon-btn {
 
 @media (max-width: 767px) {
   .game-hint-slot--active {
-    min-height: 4.5rem;
-    margin-top: 16px;
+    min-height: 3.8rem;
+    margin-top: 6px;
   }
 
   .game-page__keyboard {
@@ -664,14 +722,22 @@ a.page-header-icon-btn {
   }
 }
 
+@media (max-width: 480px) {
+  .game-hint-slot--active {
+    min-height: 3.4rem;
+    margin-top: 4px;
+  }
+}
+
 @media (max-width: 767px) {
   .game-keyboard-footnote {
-    margin-top: 8px;
+    margin-top: 2px;
+    padding: 0 10px max(4px, env(safe-area-inset-bottom, 0px));
   }
 
   .game-keyboard-footnote__general {
-    font-size: 0.68rem;
-    line-height: 1.35;
+    font-size: 0.62rem;
+    line-height: 1.25;
   }
 }
 
@@ -696,7 +762,7 @@ a.page-header-icon-btn {
 
 @media (max-width: 767px) {
   .game-hint-card {
-    padding: 7px 10px 9px;
+    padding: 5px 8px 6px;
     border-radius: 8px;
   }
 }
@@ -741,8 +807,8 @@ a.page-header-icon-btn {
 
 @media (max-width: 767px) {
   .game-hint-card__label {
-    font-size: 0.6rem;
-    margin: 0 0 2px;
+    font-size: 0.55rem;
+    margin: 0 0 1px;
   }
 }
 
@@ -756,7 +822,8 @@ a.page-header-icon-btn {
 
 @media (max-width: 767px) {
   .game-hint-card__text {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    line-height: 1.2;
   }
 }
 
