@@ -745,17 +745,6 @@ export default function Game() {
             Some player names are shortened to fit 5 letters. Example: RONALDO - RONAL
           </p>
         </div>
-
-        {/* Manual share button after game ends (before modal auto-opens) */}
-        {gameOver && !showModal && (
-          <button
-            type="button"
-            className="game-share-fallback"
-            onClick={() => setShowModal(true)}
-          >
-            Share ↗
-          </button>
-        )}
       </div>
 
       <HowToPlayModal open={showHowToPlay} onClose={dismissHowToPlay} />
