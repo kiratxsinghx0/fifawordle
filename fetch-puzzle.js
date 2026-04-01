@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const API_BASE = process.env.API_URL || "http://localhost:4010";
+const API_BASE = process.env.API_URL || "https://fifabackend-production-2dd4.up.railway.app";
 const PUZZLE_FILE = path.join(__dirname, "current-puzzle.json");
 
 async function fetchTodayPuzzle() {

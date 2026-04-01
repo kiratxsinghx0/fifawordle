@@ -12,7 +12,7 @@ export type PlayerRow = {
   hint: PlayerHint;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://fifabackend-production-2dd4.up.railway.app";
 
 export async function fetchPlayersFromAPI(): Promise<PlayerRow[]> {
   const res = await fetch(`${API_URL}/api/players`);

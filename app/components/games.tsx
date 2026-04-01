@@ -72,8 +72,13 @@ function xorDecode(encoded: string, key: string): string {
 
 type PuzzleData = { day: number; encoded: string; hash: string; previousHash: string | null };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://fifabackend-production-2dd4.up.railway.app";
 const LS_PUZZLE_CACHE_KEY = "fifaWordlePuzzleCache";
+const LS_PUZZLE_FETCHED_DATE_KEY = "fifaWordlePuzzleFetchedDate";
+
+function todayUTCDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function readCachedPuzzle(): PuzzleData | null {
   if (typeof window === "undefined") return null;
@@ -86,10 +91,22 @@ function readCachedPuzzle(): PuzzleData | null {
   }
 }
 
+function isCachedPuzzleStale(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const fetchedDate = localStorage.getItem(LS_PUZZLE_FETCHED_DATE_KEY);
+    if (!fetchedDate) return true;
+    return fetchedDate !== todayUTCDateString();
+  } catch {
+    return true;
+  }
+}
+
 function cachePuzzle(data: PuzzleData): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(LS_PUZZLE_CACHE_KEY, JSON.stringify(data));
+    localStorage.setItem(LS_PUZZLE_FETCHED_DATE_KEY, todayUTCDateString());
   } catch { /* quota / private mode */ }
 }
 
@@ -99,6 +116,17 @@ async function fetchPuzzleFromAPI(): Promise<PuzzleData> {
   const json = await res.json();
   if (!json.success || !json.data) throw new Error("Unexpected response shape");
   return json.data as PuzzleData;
+}
+
+async function triggerAutoSetPuzzle(): Promise<void> {
+  await fetch(`${API_BASE}/api/puzzle/auto-set`, { method: "POST" });
+}
+
+async function ensureFreshPuzzle(): Promise<PuzzleData> {
+  if (isCachedPuzzleStale()) {
+    await triggerAutoSetPuzzle();
+  }
+  return fetchPuzzleFromAPI();
 }
 
 const FLIP_DURATION = 340;
@@ -390,7 +418,7 @@ export default function Game() {
   const [puzzleData, setPuzzleData] = useState<PuzzleData | null>(readCachedPuzzle);
 
   useEffect(() => {
-    fetchPuzzleFromAPI()
+    ensureFreshPuzzle()
       .then((fresh) => {
         cachePuzzle(fresh);
         setPuzzleData((prev) => {
