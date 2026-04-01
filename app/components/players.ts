@@ -1,4 +1,41 @@
-export const players = [
+export type PlayerHint = {
+  age: number;
+  club: string;
+  country: string;
+  position: string;
+  trivia: string;
+};
+
+export type PlayerRow = {
+  name: string;
+  meta: { shortened: boolean; fullName?: string };
+  hint: PlayerHint;
+};
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+export async function fetchPlayersFromAPI(): Promise<PlayerRow[]> {
+  const res = await fetch(`${API_URL}/api/players`);
+  if (!res.ok) throw new Error(`Failed to fetch players: ${res.status}`);
+  const json = await res.json();
+  const rows: unknown[] = json.data ?? [];
+  return rows.map((r: any) => ({
+    name: r.name,
+    meta: {
+      shortened: Boolean(r.is_shortened),
+      ...(r.full_name ? { fullName: r.full_name } : {}),
+    },
+    hint: {
+      age: r.age,
+      club: r.club,
+      country: r.country,
+      position: r.position,
+      trivia: r.trivia,
+    },
+  }));
+}
+
+export const players: PlayerRow[] = [
   // ==================== LEGENDS (Retired or near-retired) ====================
   { name:"MESSI", meta:{shortened:false}, hint:{age:36,club:"Inter Miami",country:"Argentina",position:"FW",trivia:"World Cup 2022 winner"} },
   { name:"RONAL", meta:{shortened:true,fullName:"Cristiano Ronaldo"}, hint:{age:39,club:"Al Nassr",country:"Portugal",position:"FW",trivia:"All-time top scorer"} },

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import ShareModal from "./share";
 import HowToPlayModal from "./how-to-play-modal";
 import GuessHistoryModal from "./guess-history-modal";
@@ -7,24 +7,11 @@ import PageHeader, { OPEN_HOW_TO_PLAY_EVENT, OPEN_HINT_HISTORY_EVENT } from "./p
 import { dispatchHintCountUpdate } from "./hint-history-open";
 import { COOKIE_CONSENT_STORAGE_KEY } from "./cookie-banner";
 import NextPuzzleTimer from "./timers";
-import { players } from "./players";
-import puzzleData from "../../current-puzzle.json";
+import { players, fetchPlayersFromAPI } from "./players";
+import type { PlayerRow, PlayerHint } from "./players";
 
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
-type PlayerHint = {
-  age: number;
-  club: string;
-  country: string;
-  position: string;
-  trivia: string;
-};
-
-type PlayerRow = {
-  name: string;
-  meta?: { shortened?: boolean; fullName?: string };
-  hint: PlayerHint;
-};
 
 const HINT_LABELS = ["Age", "Club", "Country", "Position", "Trivia"] as const;
 
@@ -58,11 +45,9 @@ function hintForWrongGuess(h: PlayerHint, wrongGuessCount: number): { label: str
   return { label, text: values[tier] };
 }
 
-const VALID_GUESSES = players.map((p: PlayerRow) => p.name.toLowerCase());
-
-function resolvePlayerByName(token: string): PlayerRow {
+function resolvePlayerByName(token: string, playerList: PlayerRow[]): PlayerRow {
   const normalized = token.trim().toLowerCase();
-  const row = players.find((p) => p.name.toLowerCase() === normalized);
+  const row = playerList.find((p) => p.name.toLowerCase() === normalized);
   if (!row) {
     throw new Error(
       `games.tsx: PLAYER_TO_GUESS "${token}" must match a name in players.ts`
@@ -85,14 +70,37 @@ function xorDecode(encoded: string, key: string): string {
   return result;
 }
 
-const PLAYER_TO_GUESS = xorDecode(puzzleData.encoded, ENCODE_KEY).toUpperCase();
+type PuzzleData = { day: number; encoded: string; hash: string; previousHash: string | null };
 
-const targetPlayer = resolvePlayerByName(PLAYER_TO_GUESS);
-const answer = targetPlayer.name.toLowerCase();
-const nameNotice =
-  targetPlayer.meta?.shortened === true && targetPlayer.meta.fullName
-    ? targetPlayer.meta.fullName
-    : null;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const LS_PUZZLE_CACHE_KEY = "fifaWordlePuzzleCache";
+
+function readCachedPuzzle(): PuzzleData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(LS_PUZZLE_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PuzzleData;
+  } catch {
+    return null;
+  }
+}
+
+function cachePuzzle(data: PuzzleData): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LS_PUZZLE_CACHE_KEY, JSON.stringify(data));
+  } catch { /* quota / private mode */ }
+}
+
+async function fetchPuzzleFromAPI(): Promise<PuzzleData> {
+  const res = await fetch(`${API_BASE}/api/puzzle/today`);
+  if (!res.ok) throw new Error(`API returned ${res.status}`);
+  const json = await res.json();
+  if (!json.success || !json.data) throw new Error("Unexpected response shape");
+  return json.data as PuzzleData;
+}
+
 const FLIP_DURATION = 340;
 const FLIP_STAGGER  = 80;
 
@@ -132,8 +140,6 @@ function getLetterStatuses(guess: string, answer: string): string[] {
   return result;
 }
 
-/** Changes when a new puzzle is set via main.js so stale guesses/hints do not carry over. */
-const CURRENT_GAME_ID = String(puzzleData.day);
 const LS_GAME_ID_KEY = "gameId";
 
 const LS_GUESS_KEY = "guess";
@@ -189,11 +195,11 @@ function persistStats(stats: GameStats): void {
 /** Key that tracks whether stats were already recorded for a given game id. */
 const LS_STATS_RECORDED_KEY = "fifaWordleStatsRecordedGameId";
 
-function recordGameResult(won: boolean): GameStats {
+function recordGameResult(won: boolean, gameId: string): GameStats {
   const prev = readStats();
   const alreadyRecorded =
     typeof window !== "undefined" &&
-    localStorage.getItem(LS_STATS_RECORDED_KEY) === CURRENT_GAME_ID;
+    localStorage.getItem(LS_STATS_RECORDED_KEY) === gameId;
   if (alreadyRecorded) return prev;
 
   const next: GameStats = {
@@ -205,7 +211,7 @@ function recordGameResult(won: boolean): GameStats {
       : prev.maxStreak,
   };
   persistStats(next);
-  try { localStorage.setItem(LS_STATS_RECORDED_KEY, CURRENT_GAME_ID); } catch { /* */ }
+  try { localStorage.setItem(LS_STATS_RECORDED_KEY, gameId); } catch { /* */ }
   return next;
 }
 
@@ -213,15 +219,15 @@ function recordGameResult(won: boolean): GameStats {
  * If persisted `gameId` matches `CURRENT_GAME_ID`, keep game data. Otherwise clear game-related keys
  * and persist the new id (new puzzle / first visit).
  */
-function syncGameIdStorage(): void {
+function syncGameIdStorage(gameId: string): void {
   if (typeof window === "undefined") return;
   try {
     const stored = localStorage.getItem(LS_GAME_ID_KEY);
-    if (stored === CURRENT_GAME_ID) return;
+    if (stored === gameId) return;
     for (const key of GAME_STORAGE_KEYS) {
       localStorage.removeItem(key);
     }
-    localStorage.setItem(LS_GAME_ID_KEY, CURRENT_GAME_ID);
+    localStorage.setItem(LS_GAME_ID_KEY, gameId);
   } catch {
     /* quota / private mode */
   }
@@ -380,6 +386,26 @@ function formatGameTimer(totalSeconds: number): string {
 
 export default function Game() {
   const shellVpClass = useGameShellViewportClass();
+
+  const [puzzleData, setPuzzleData] = useState<PuzzleData | null>(readCachedPuzzle);
+
+  useEffect(() => {
+    fetchPuzzleFromAPI()
+      .then((fresh) => {
+        cachePuzzle(fresh);
+        setPuzzleData((prev) => {
+          if (prev && prev.day === fresh.day) return prev;
+          return fresh;
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  const playerToGuess = puzzleData
+    ? xorDecode(puzzleData.encoded, ENCODE_KEY).toUpperCase()
+    : "";
+  const currentGameId = puzzleData ? String(puzzleData.day) : "";
+
   const [currentInput,  setCurrentInput]  = useState("");
   const [guesses,       setGuesses]       = useState<string[]>([]);
   const [statuses,      setStatuses]      = useState<string[][]>([]);
@@ -397,7 +423,31 @@ export default function Game() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [cookieConsentDone, setCookieConsentDone] = useState(false);
   const [howToPlayDone, setHowToPlayDone] = useState(false);
-  const inputLocked = !cookieConsentDone || !howToPlayDone;
+  const inputLocked = !puzzleData || !cookieConsentDone || !howToPlayDone;
+
+  const [playerList, setPlayerList] = useState<PlayerRow[]>(players);
+
+  useEffect(() => {
+    fetchPlayersFromAPI()
+      .then((data) => setPlayerList(data))
+      .catch(() => {});
+  }, []);
+
+  const validGuesses = useMemo(
+    () => playerList.map((p) => p.name.toLowerCase()),
+    [playerList]
+  );
+
+  const targetPlayer = useMemo(
+    () => playerToGuess ? resolvePlayerByName(playerToGuess, playerList) : null,
+    [playerList, playerToGuess]
+  );
+
+  const answer = targetPlayer?.name.toLowerCase() ?? "";
+  const nameNotice =
+    targetPlayer?.meta?.shortened === true && targetPlayer.meta.fullName
+      ? targetPlayer.meta.fullName
+      : null;
 
   useEffect(() => {
     setReturningUserHints(readReturningUserHintEligible());
@@ -496,7 +546,8 @@ export default function Game() {
   const showInitialTriviaHint = returningUserHints && guesses.length === 0;
 
   /** One hint at a time; each new wrong guess replaces the previous (age → club → country → position → trivia). */
-  const currentHint = hintForWrongGuess(targetPlayer.hint, wrongGuessCount);
+  const defaultHint: PlayerHint = { age: 0, club: "", country: "", position: "", trivia: "" };
+  const currentHint = hintForWrongGuess(targetPlayer?.hint ?? defaultHint, wrongGuessCount);
   const showProgressiveHints =
     wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
 
@@ -516,11 +567,12 @@ export default function Game() {
     nameNotice ??
     `${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`;
 
+  const playerHint = targetPlayer?.hint ?? defaultHint;
   const allUnlockedHints: { label: string; text: string }[] = [
-    { label: "Trivia", text: targetPlayer.hint.trivia },
+    { label: "Trivia", text: playerHint.trivia },
   ];
   for (let i = 1; i <= wrongGuessCount; i++) {
-    allUnlockedHints.push(hintForWrongGuess(targetPlayer.hint, i));
+    allUnlockedHints.push(hintForWrongGuess(playerHint, i));
   }
 
   useEffect(() => {
@@ -529,28 +581,28 @@ export default function Game() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wrongGuessCount]);
 
-  // Restore when userHasPlayed is "yes" (puzzleId only exists after game ends)
   useEffect(() => {
-    syncGameIdStorage();
+    if (!playerToGuess || !currentGameId) return;
+    syncGameIdStorage(currentGameId);
     try {
       const savedElapsed = localStorage.getItem(LS_TIMER_ELAPSED_KEY);
       if (savedElapsed) setElapsedSeconds(parseInt(savedElapsed, 10) || 0);
       if (localStorage.getItem(LS_TIMER_STARTED_KEY) === "1") setTimerStarted(true);
     } catch { /* */ }
 
-    const loaded = readStoredGuesses(PLAYER_TO_GUESS, answer);
+    const loaded = readStoredGuesses(playerToGuess, answer);
     if (!loaded) return;
     const last = loaded.guesses[loaded.guesses.length - 1];
     const wasStoredWin = last === answer;
     const gameDone = wasStoredWin || loaded.guesses.length === MAX_GUESSES;
-    const dismissedShare = gameDone && readShareDismissedForPuzzle(PLAYER_TO_GUESS);
+    const dismissedShare = gameDone && readShareDismissedForPuzzle(playerToGuess);
     queueMicrotask(() => {
       setGuesses(loaded.guesses);
       setStatuses(loaded.statuses);
       setLetterStatus(letterStatusFromRows(loaded.guesses, loaded.statuses));
       if (dismissedShare) setShareDismissed(true);
     });
-  }, []);
+  }, [playerToGuess, currentGameId, answer]);
 
   useEffect(() => {
     if (!timerStarted || gameOver) return;
@@ -577,7 +629,7 @@ export default function Game() {
         const guess    = flippingGuess;
         const rowStats = flippingStatuses;
         const completedRowIndex = flippingRow ?? 0;
-        persistGuess(PLAYER_TO_GUESS, completedRowIndex + 1, guess, answer);
+        persistGuess(playerToGuess, completedRowIndex + 1, guess, answer);
 
         setGuesses(prev => [...prev, guess]);
         setStatuses(prev => [...prev, rowStats]);
@@ -601,7 +653,7 @@ export default function Game() {
         const justWon = guess === answer;
         const justLost = !justWon && completedRowIndex + 1 === MAX_GUESSES;
         if (justWon || justLost) {
-          setStats(recordGameResult(justWon));
+          setStats(recordGameResult(justWon, currentGameId));
         }
 
         if (justWon && !prefersReducedMotion()) {
@@ -640,7 +692,7 @@ export default function Game() {
         setTimeout(() => { setShaking(false); setMessage(""); }, 600);
         return;
       }
-      if (currentInput !== answer && !VALID_GUESSES.includes(currentInput)) {
+      if (currentInput !== answer && !validGuesses.includes(currentInput)) {
         setMessage("Not a valid player name");
         setShaking(true);
         setTimeout(() => { setShaking(false); setMessage(""); }, 600);
@@ -666,7 +718,7 @@ export default function Game() {
       }
       setCurrentInput(prev => prev.length < WORD_LENGTH ? prev + key.toLowerCase() : prev);
     }
-  }, [currentInput, guesses, isAnimating, gameOver, timerStarted, inputLocked]);
+  }, [currentInput, guesses, isAnimating, gameOver, timerStarted, inputLocked, answer, validGuesses]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
@@ -795,7 +847,7 @@ export default function Game() {
                   className="game-hint-card__content game-hint-card__content--enter"
                 >
                   <p className="game-hint-card__label">Trivia</p>
-                  <p className="game-hint-card__text">{targetPlayer.hint.trivia}</p>
+                  <p className="game-hint-card__text">{playerHint.trivia}</p>
                 </div>
               ) : (
                 <div
@@ -917,7 +969,7 @@ export default function Game() {
           onClose={() => {
             setShowModal(false);
             setShareDismissed(true);
-            persistShareDismissed(PLAYER_TO_GUESS);
+            persistShareDismissed(playerToGuess);
           }}
         />
       )}
