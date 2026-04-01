@@ -45,15 +45,9 @@ function hintForWrongGuess(h: PlayerHint, wrongGuessCount: number): { label: str
   return { label, text: values[tier] };
 }
 
-function resolvePlayerByName(token: string, playerList: PlayerRow[]): PlayerRow {
+function resolvePlayerByName(token: string, playerList: PlayerRow[]): PlayerRow | null {
   const normalized = token.trim().toLowerCase();
-  const row = playerList.find((p) => p.name.toLowerCase() === normalized);
-  if (!row) {
-    throw new Error(
-      `games.tsx: PLAYER_TO_GUESS "${token}" must match a name in players.ts`
-    );
-  }
-  return row as PlayerRow;
+  return playerList.find((p) => p.name.toLowerCase() === normalized) ?? null;
 }
 
 const MAX_GUESSES  = 6;
@@ -451,7 +445,6 @@ export default function Game() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [cookieConsentDone, setCookieConsentDone] = useState(false);
   const [howToPlayDone, setHowToPlayDone] = useState(false);
-  const inputLocked = !puzzleData || !cookieConsentDone || !howToPlayDone;
 
   const [playerList, setPlayerList] = useState<PlayerRow[]>(players);
 
@@ -470,6 +463,8 @@ export default function Game() {
     () => playerToGuess ? resolvePlayerByName(playerToGuess, playerList) : null,
     [playerList, playerToGuess]
   );
+
+  const inputLocked = !puzzleData || !targetPlayer || !cookieConsentDone || !howToPlayDone;
 
   const answer = targetPlayer?.name.toLowerCase() ?? "";
   const nameNotice =
@@ -571,17 +566,17 @@ export default function Game() {
   const wrongGuessCount = guesses.filter((g) => g !== answer).length;
 
   /** Trivia until the first guess is committed (stays up during flip — hint tier updates only after tiles finish). */
-  const showInitialTriviaHint = returningUserHints && guesses.length === 0;
+  const showInitialTriviaHint = !!targetPlayer && returningUserHints && guesses.length === 0;
 
   /** One hint at a time; each new wrong guess replaces the previous (age → club → country → position → trivia). */
   const defaultHint: PlayerHint = { age: 0, club: "", country: "", position: "", trivia: "" };
   const currentHint = hintForWrongGuess(targetPlayer?.hint ?? defaultHint, wrongGuessCount);
   const showProgressiveHints =
-    wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
+    !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
 
   /** After a loss, reveal the player in the hint card (above keyboard, not in the grid). */
   const showAnswerReveal =
-    lost && !isAnimating && !(gameOver && shareDismissed);
+    !!targetPlayer && lost && !isAnimating && !(gameOver && shareDismissed);
 
   /** Stable key for animated hint body — changes only after a guess row commits, not mid-flip. */
   const hintContentKey = showAnswerReveal
@@ -612,24 +607,33 @@ export default function Game() {
   useEffect(() => {
     if (!playerToGuess || !currentGameId) return;
     syncGameIdStorage(currentGameId);
+
+    // Reset React state first — prevents stale guesses from a previous puzzle
+    setGuesses([]);
+    setStatuses([]);
+    setLetterStatus({});
+    setCurrentInput("");
+    setShareDismissed(false);
+    setShowModal(false);
+    setTimerStarted(false);
+    setElapsedSeconds(0);
+
     try {
       const savedElapsed = localStorage.getItem(LS_TIMER_ELAPSED_KEY);
       if (savedElapsed) setElapsedSeconds(parseInt(savedElapsed, 10) || 0);
       if (localStorage.getItem(LS_TIMER_STARTED_KEY) === "1") setTimerStarted(true);
     } catch { /* */ }
 
-    const loaded = readStoredGuesses(playerToGuess, answer);
+    const loaded = readStoredGuesses(currentGameId, answer);
     if (!loaded) return;
     const last = loaded.guesses[loaded.guesses.length - 1];
     const wasStoredWin = last === answer;
     const gameDone = wasStoredWin || loaded.guesses.length === MAX_GUESSES;
-    const dismissedShare = gameDone && readShareDismissedForPuzzle(playerToGuess);
-    queueMicrotask(() => {
-      setGuesses(loaded.guesses);
-      setStatuses(loaded.statuses);
-      setLetterStatus(letterStatusFromRows(loaded.guesses, loaded.statuses));
-      if (dismissedShare) setShareDismissed(true);
-    });
+    const dismissedShare = gameDone && readShareDismissedForPuzzle(currentGameId);
+    setGuesses(loaded.guesses);
+    setStatuses(loaded.statuses);
+    setLetterStatus(letterStatusFromRows(loaded.guesses, loaded.statuses));
+    if (dismissedShare) setShareDismissed(true);
   }, [playerToGuess, currentGameId, answer]);
 
   useEffect(() => {
@@ -657,7 +661,7 @@ export default function Game() {
         const guess    = flippingGuess;
         const rowStats = flippingStatuses;
         const completedRowIndex = flippingRow ?? 0;
-        persistGuess(playerToGuess, completedRowIndex + 1, guess, answer);
+        persistGuess(currentGameId, completedRowIndex + 1, guess, answer);
 
         setGuesses(prev => [...prev, guess]);
         setStatuses(prev => [...prev, rowStats]);
@@ -997,7 +1001,7 @@ export default function Game() {
           onClose={() => {
             setShowModal(false);
             setShareDismissed(true);
-            persistShareDismissed(playerToGuess);
+            persistShareDismissed(currentGameId);
           }}
         />
       )}
