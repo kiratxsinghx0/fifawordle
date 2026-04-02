@@ -1,6 +1,6 @@
-import Game from "./games/fifa/fifa-game";
+import Game from "./fifa-game";
 
-export default function Home() {
+export default function FifaPage() {
   return (
     <main className="game-page">
       <Game />

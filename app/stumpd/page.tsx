@@ -1,6 +1,6 @@
-import Game from "./games/fifa/fifa-game";
+import Game from "./stumpd-game";
 
-export default function Home() {
+export default function StumpdPage() {
   return (
     <main className="game-page">
       <Game />

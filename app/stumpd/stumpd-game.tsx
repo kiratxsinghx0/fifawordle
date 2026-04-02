@@ -1,24 +1,35 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
-import ShareModal from "./share";
-import HowToPlayModal from "./how-to-play-modal";
-import GuessHistoryModal from "./guess-history-modal";
-import PageHeader, { OPEN_HOW_TO_PLAY_EVENT, OPEN_HINT_HISTORY_EVENT } from "./page-header";
-import { dispatchHintCountUpdate } from "./hint-history-open";
-import { COOKIE_CONSENT_STORAGE_KEY } from "./cookie-banner";
-import NextPuzzleTimer from "./timers";
-import { players, fetchPlayersFromAPI } from "./players";
-import type { PlayerRow, PlayerHint } from "./players";
+import ShareModal from "../components/share";
+import HowToPlayModal from "../components/how-to-play-modal";
+import StumpdHowToPlay from "./stumpd-how-to-play";
+import PageHeader, { OPEN_HOW_TO_PLAY_EVENT, OPEN_HINT_HISTORY_EVENT } from "../components/page-header";
+import { dispatchHintCountUpdate } from "../components/hint-history-open";
+import { COOKIE_CONSENT_STORAGE_KEY } from "../components/cookie-banner";
+import NextPuzzleTimer from "../components/timers";
+import { iplPlayers, fetchIplPlayersFromAPI, findHint, collectTrivias } from "./ipl-players";
+import type { IplPlayerRow } from "./ipl-players";
+import { fetchPuzzleToday, triggerAutoSetPuzzle as triggerAutoSet } from "../services/ipl-api";
+import type { PuzzleData } from "../services/ipl-api";
 
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
 
-const HINT_LABELS = ["Age", "Club", "Country", "Position", "Trivia"] as const;
+const MAX_HINT_TOKENS = 3;
 
-/** Set in localStorage when the user dismisses the first-visit How to play modal. */
-const LS_HOW_TO_PLAY_DISMISSED = "fifaWordleHowToPlayDismissed";
-/** Explicit "seen how to play" flag — used with cookie consent for returning-user trivia hint. */
-const LS_HOW_TO_PLAY_SEEN = "howToPlaySeen";
+const HINT_CATEGORIES = [
+  { key: "age", label: "Age" },
+  { key: "country", label: "Country" },
+  { key: "iplTeam", label: "IPL Team" },
+  { key: "role", label: "Role" },
+  { key: "teams", label: "Teams" },
+  { key: "batting", label: "Batting" },
+  { key: "bowling", label: "Bowling" },
+  { key: "trivia", label: "Trivia" },
+] as const;
+
+const LS_HOW_TO_PLAY_DISMISSED = "stumpdpuzzle_howToPlayDismissed";
+const LS_HOW_TO_PLAY_SEEN = "stumpdpuzzle_howToPlaySeen";
 
 function readReturningUserHintEligible(): boolean {
   if (typeof window === "undefined") return false;
@@ -32,22 +43,19 @@ function readReturningUserHintEligible(): boolean {
   }
 }
 
-function hintForWrongGuess(h: PlayerHint, wrongGuessCount: number): { label: string; text: string } {
-  const tier = Math.min(Math.max(wrongGuessCount - 1, 0), HINT_LABELS.length - 1);
-  const label = HINT_LABELS[tier];
-  const values: [string, string, string, string, string] = [
-    String(h.age),
-    h.club,
-    h.country,
-    h.position,
-    h.trivia,
-  ];
-  return { label, text: values[tier] };
-}
+type IplHintEntry = Record<string, unknown>;
 
-function resolvePlayerByName(token: string, playerList: PlayerRow[]): PlayerRow | null {
+function resolvePlayerByName(token: string, playerList: IplPlayerRow[]): IplPlayerRow | null {
   const normalized = token.trim().toLowerCase();
   return playerList.find((p) => p.name.toLowerCase() === normalized) ?? null;
+}
+
+function isSamePlayer(guess: string, answer: string, playerList: IplPlayerRow[]): boolean {
+  if (guess === answer) return true;
+  const gp = resolvePlayerByName(guess, playerList);
+  const ap = resolvePlayerByName(answer, playerList);
+  if (!gp || !ap) return false;
+  return !!gp.meta.fullName && gp.meta.fullName === ap.meta.fullName;
 }
 
 const MAX_GUESSES  = 6;
@@ -64,11 +72,8 @@ function xorDecode(encoded: string, key: string): string {
   return result;
 }
 
-type PuzzleData = { day: number; encoded: string; hash: string; previousHash: string | null };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://fifabackend-production-2dd4.up.railway.app";
-const LS_PUZZLE_CACHE_KEY = "fifaWordlePuzzleCache";
-const LS_PUZZLE_FETCHED_DATE_KEY = "fifaWordlePuzzleFetchedDate";
+const LS_PUZZLE_CACHE_KEY = "stumpdpuzzle_cache";
+const LS_PUZZLE_FETCHED_DATE_KEY = "stumpdpuzzle_fetchedDate";
 
 function todayUTCDateString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -104,23 +109,11 @@ function cachePuzzle(data: PuzzleData): void {
   } catch { /* quota / private mode */ }
 }
 
-async function fetchPuzzleFromAPI(): Promise<PuzzleData> {
-  const res = await fetch(`${API_BASE}/api/puzzle/today`);
-  if (!res.ok) throw new Error(`API returned ${res.status}`);
-  const json = await res.json();
-  if (!json.success || !json.data) throw new Error("Unexpected response shape");
-  return json.data as PuzzleData;
-}
-
-async function triggerAutoSetPuzzle(): Promise<void> {
-  await fetch(`${API_BASE}/api/puzzle/auto-set`, { method: "POST" });
-}
-
 async function ensureFreshPuzzle(): Promise<PuzzleData> {
   if (isCachedPuzzleStale()) {
-    await triggerAutoSetPuzzle();
+    await triggerAutoSet();
   }
-  return fetchPuzzleFromAPI();
+  return fetchPuzzleToday();
 }
 
 const FLIP_DURATION = 340;
@@ -162,17 +155,21 @@ function getLetterStatuses(guess: string, answer: string): string[] {
   return result;
 }
 
-const LS_GAME_ID_KEY = "gameId";
+const LS_GAME_ID_KEY = "stumpdpuzzle_gameId";
 
-const LS_GUESS_KEY = "guess";
-const LS_USER_HAS_PLAYED_KEY = "userHasPlayed";
+const LS_GUESS_KEY = "stumpdpuzzle_guess";
+const LS_USER_HAS_PLAYED_KEY = "stumpdpuzzle_userHasPlayed";
 const LS_USER_HAS_PLAYED_VALUE = "yes";
-const LS_PUZZLE_ID_KEY = "puzzleId";
-/** When set to the current puzzle id, user closed share — show next-puzzle timer (restored on reload). */
-const LS_SHARE_DISMISSED_PUZZLE_KEY = "fifaWordleShareDismissedPuzzleId";
-const LS_UNLOCKED_HINTS_KEY = "fifaWordleUnlockedHints";
-const LS_TIMER_ELAPSED_KEY = "fifaWordleTimerElapsed";
-const LS_TIMER_STARTED_KEY = "fifaWordleTimerStarted";
+const LS_PUZZLE_ID_KEY = "stumpdpuzzle_puzzleId";
+const LS_SHARE_DISMISSED_PUZZLE_KEY = "stumpdpuzzle_shareDismissedPuzzleId";
+const LS_UNLOCKED_HINTS_KEY = "stumpdpuzzle_unlockedHints";
+const LS_TIMER_ELAPSED_KEY = "stumpdpuzzle_timerElapsed";
+const LS_TIMER_STARTED_KEY = "stumpdpuzzle_timerStarted";
+const LS_HINT_TOKENS_KEY = "stumpdpuzzle_hintTokensRemaining";
+const LS_CHOSEN_HINTS_KEY = "stumpdpuzzle_chosenHints2";
+const LS_USED_CATEGORIES_KEY = "stumpdpuzzle_usedCategories";
+const LS_USED_TRIVIA_KEY = "stumpdpuzzle_usedTriviaIndices";
+const LS_TOKEN_USED_GUESS_KEY = "stumpdpuzzle_tokenUsedForGuess";
 
 const GAME_STORAGE_KEYS = [
   LS_GUESS_KEY,
@@ -182,10 +179,15 @@ const GAME_STORAGE_KEYS = [
   LS_UNLOCKED_HINTS_KEY,
   LS_TIMER_ELAPSED_KEY,
   LS_TIMER_STARTED_KEY,
+  LS_HINT_TOKENS_KEY,
+  LS_CHOSEN_HINTS_KEY,
+  LS_USED_CATEGORIES_KEY,
+  LS_USED_TRIVIA_KEY,
+  LS_TOKEN_USED_GUESS_KEY,
 ] as const;
 
 /** ── Persistent stats (survive across puzzles) ── */
-const LS_STATS_KEY = "fifaWordleStats";
+const LS_STATS_KEY = "stumpdpuzzle_stats";
 
 export type GameStats = {
   gamesPlayed: number;
@@ -215,7 +217,7 @@ function persistStats(stats: GameStats): void {
 }
 
 /** Key that tracks whether stats were already recorded for a given game id. */
-const LS_STATS_RECORDED_KEY = "fifaWordleStatsRecordedGameId";
+const LS_STATS_RECORDED_KEY = "stumpdpuzzle_statsRecordedGameId";
 
 function recordGameResult(won: boolean, gameId: string): GameStats {
   const prev = readStats();
@@ -273,7 +275,7 @@ function readShareDismissedForPuzzle(puzzleId: string): boolean {
   }
 }
 
-function parseGuessObject(raw: string, targetAnswer: string): { guesses: string[]; statuses: string[][] } | null {
+function parseGuessObject(raw: string, targetAnswer: string, playerList: IplPlayerRow[]): { guesses: string[]; statuses: string[][] } | null {
   const obj = JSON.parse(raw) as Record<string, string>;
   const keys = Object.keys(obj)
     .map(Number)
@@ -286,7 +288,8 @@ function parseGuessObject(raw: string, targetAnswer: string): { guesses: string[
     const g = obj[String(k)];
     if (typeof g !== "string" || g.length !== WORD_LENGTH) continue;
     guesses.push(g);
-    statuses.push(getLetterStatuses(g, targetAnswer));
+    const isAlias = g !== targetAnswer && isSamePlayer(g, targetAnswer, playerList);
+    statuses.push(isAlias ? Array(WORD_LENGTH).fill("correct") : getLetterStatuses(g, targetAnswer));
   }
   if (guesses.length === 0) return null;
   return { guesses, statuses };
@@ -297,7 +300,7 @@ function parseGuessObject(raw: string, targetAnswer: string): { guesses: string[
  * `puzzleId` is only written after the game ends (win or 6 guesses); until then it is absent and we still restore in-progress boards.
  * If `puzzleId` is present, it must match `PLAYER_TO_GUESS` (finished game for this puzzle).
  */
-function readStoredGuesses(puzzleId: string, targetAnswer: string): { guesses: string[]; statuses: string[][] } | null {
+function readStoredGuesses(puzzleId: string, targetAnswer: string, playerList: IplPlayerRow[]): { guesses: string[]; statuses: string[][] } | null {
   if (typeof window === "undefined") return null;
   try {
     if (localStorage.getItem(LS_USER_HAS_PLAYED_KEY) !== "yes") return null;
@@ -307,7 +310,7 @@ function readStoredGuesses(puzzleId: string, targetAnswer: string): { guesses: s
     }
     const raw = localStorage.getItem(LS_GUESS_KEY);
     if (!raw) return null;
-    return parseGuessObject(raw, targetAnswer);
+    return parseGuessObject(raw, targetAnswer, playerList);
   } catch {
     return null;
   }
@@ -322,6 +325,7 @@ function persistGuess(
   guessIndex1Based: number,
   word: string,
   targetAnswer: string,
+  playerList: IplPlayerRow[],
 ) {
   if (typeof window === "undefined") return;
   try {
@@ -336,7 +340,7 @@ function persistGuess(
     }
     obj[String(guessIndex1Based)] = word;
     localStorage.setItem(LS_GUESS_KEY, JSON.stringify(obj));
-    const won = word === targetAnswer;
+    const won = isSamePlayer(word, targetAnswer, playerList);
     const gameOver = won || guessIndex1Based === MAX_GUESSES;
     if (gameOver) {
       localStorage.setItem(LS_PUZZLE_ID_KEY, puzzleId);
@@ -409,9 +413,12 @@ function formatGameTimer(totalSeconds: number): string {
 export default function Game() {
   const shellVpClass = useGameShellViewportClass();
 
-  const [puzzleData, setPuzzleData] = useState<PuzzleData | null>(readCachedPuzzle);
+  const [puzzleData, setPuzzleData] = useState<PuzzleData | null>(null);
 
   useEffect(() => {
+    const cached = readCachedPuzzle();
+    if (cached && !isCachedPuzzleStale()) setPuzzleData(cached);
+
     ensureFreshPuzzle()
       .then((fresh) => {
         cachePuzzle(fresh);
@@ -436,20 +443,26 @@ export default function Game() {
   const [message,       setMessage]       = useState("");
   const [showModal,     setShowModal]     = useState(false);
   const [showHowToPlay, setShowHowToPlay]  = useState(false);
-  const [showHintHistory, setShowHintHistory] = useState(false);
+  const [showHintChooser, setShowHintChooser] = useState(false);
   const [shareDismissed, setShareDismissed] = useState(false);
   /** Cookie accepted + how to play seen — enables initial trivia before first guess (client-read). */
   const [returningUserHints, setReturningUserHints] = useState(false);
+  const [hintTokens, setHintTokens] = useState(MAX_HINT_TOKENS);
+  const [chosenHints, setChosenHints] = useState<{ label: string; text: string }[]>([]);
+  const [usedCategories, setUsedCategories] = useState<string[]>([]);
+  const [usedTriviaIndices, setUsedTriviaIndices] = useState<number[]>([]);
+  const [tokenUsedForGuess, setTokenUsedForGuess] = useState(0);
   const [stats, setStats] = useState<GameStats>(DEFAULT_STATS);
   const [timerStarted, setTimerStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [cookieConsentDone, setCookieConsentDone] = useState(false);
   const [howToPlayDone, setHowToPlayDone] = useState(false);
+  const [aliasWin, setAliasWin] = useState(false);
 
-  const [playerList, setPlayerList] = useState<PlayerRow[]>(players);
+  const [playerList, setPlayerList] = useState<IplPlayerRow[]>(iplPlayers);
 
   useEffect(() => {
-    fetchPlayersFromAPI()
+    fetchIplPlayersFromAPI()
       .then((data) => setPlayerList(data))
       .catch(() => {});
   }, []);
@@ -542,12 +555,19 @@ export default function Game() {
     return () => window.removeEventListener(OPEN_HOW_TO_PLAY_EVENT, onOpenFromHeader);
   }, []);
 
-  /** Header hint button opens Hint history modal. */
+  /** Header hint button opens hint chooser modal. */
   useEffect(() => {
-    const onOpenHints = () => setShowHintHistory(true);
+    const onOpenHints = () => setShowHintChooser(true);
     window.addEventListener(OPEN_HINT_HISTORY_EVENT, onOpenHints);
     return () => window.removeEventListener(OPEN_HINT_HISTORY_EVENT, onOpenHints);
   }, []);
+
+  useEffect(() => {
+    if (!showHintChooser) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowHintChooser(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showHintChooser]);
 
   // Animation state
   const [flippingRow,      setFlippingRow]      = useState<number | null>(null);
@@ -559,50 +579,87 @@ export default function Game() {
   const [winBounceRow, setWinBounceRow] = useState<number | null>(null);
 
   const isAnimating = flippingRow !== null;
-  const won      = guesses.length > 0 && guesses[guesses.length - 1] === answer;
+  const won      = guesses.length > 0 && isSamePlayer(guesses[guesses.length - 1], answer, playerList);
   const lost     = !won && guesses.length === MAX_GUESSES;
   const gameOver = won || lost;
 
-  const wrongGuessCount = guesses.filter((g) => g !== answer).length;
+  const wrongGuessCount = guesses.filter((g) => !isSamePlayer(g, answer, playerList)).length;
 
-  /** Trivia until the first guess is committed (stays up during flip — hint tier updates only after tiles finish). */
-  const showInitialTriviaHint = !!targetPlayer && returningUserHints && guesses.length === 0;
+  const playerHints: IplHintEntry[] = targetPlayer?.hints ?? [];
 
-  /** One hint at a time; each new wrong guess replaces the previous (age → club → country → position → trivia). */
-  const defaultHint: PlayerHint = { age: 0, club: "", country: "", position: "", trivia: "" };
-  const currentHint = hintForWrongGuess(targetPlayer?.hint ?? defaultHint, wrongGuessCount);
-  const showProgressiveHints =
-    !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
+  const showOpeningHint = !!targetPlayer && guesses.length === 0;
+  const showTokenBox = !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
+  const showAnswerReveal = !!targetPlayer && lost && !isAnimating && !(gameOver && shareDismissed);
+  const showHintSlot = showOpeningHint || showTokenBox || showAnswerReveal;
 
-  /** After a loss, reveal the player in the hint card (above keyboard, not in the grid). */
-  const showAnswerReveal =
-    !!targetPlayer && lost && !isAnimating && !(gameOver && shareDismissed);
-
-  /** Stable key for animated hint body — changes only after a guess row commits, not mid-flip. */
-  const hintContentKey = showAnswerReveal
-    ? "answer"
-    : showInitialTriviaHint
-      ? "trivia"
-      : `prog-${wrongGuessCount}`;
-  const showHintSlot =
-    showInitialTriviaHint || showProgressiveHints || showAnswerReveal;
   const displayRevealName =
-    nameNotice ??
+    targetPlayer?.meta?.fullName ??
     `${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`;
 
-  const playerHint = targetPlayer?.hint ?? defaultHint;
+  const openingHintText = String(findHint(playerHints, "openingHint") ?? "");
+  const canChooseHint = hintTokens > 0 && wrongGuessCount > 0 && tokenUsedForGuess < wrongGuessCount;
+
   const allUnlockedHints: { label: string; text: string }[] = [
-    { label: "Trivia", text: playerHint.trivia },
+    { label: "Opening Clue", text: openingHintText },
+    ...chosenHints,
   ];
-  for (let i = 1; i <= wrongGuessCount; i++) {
-    allUnlockedHints.push(hintForWrongGuess(playerHint, i));
-  }
 
   useEffect(() => {
     persistUnlockedHints(allUnlockedHints);
     dispatchHintCountUpdate(allUnlockedHints.length);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wrongGuessCount]);
+  }, [chosenHints.length]);
+
+  const MAX_TRIVIA_PICKS = 2;
+  const triviaPickCount = usedCategories.filter(k => k === "trivia").length;
+  const isTriviaExhausted = triviaPickCount >= MAX_TRIVIA_PICKS || usedTriviaIndices.length >= collectTrivias(playerHints).length;
+
+  const handleSelectHint = useCallback((categoryKey: string) => {
+    if (hintTokens <= 0 || wrongGuessCount <= 0) return;
+    if (tokenUsedForGuess >= wrongGuessCount) return;
+
+    const isTrivia = categoryKey === "trivia";
+    if (!isTrivia && usedCategories.includes(categoryKey)) return;
+    if (isTrivia) {
+      const picks = usedCategories.filter(k => k === "trivia").length;
+      if (picks >= MAX_TRIVIA_PICKS) return;
+    }
+
+    let text = "";
+    if (isTrivia) {
+      const trivias = collectTrivias(playerHints);
+      const available = trivias.map((_, i) => i).filter(i => !usedTriviaIndices.includes(i));
+      if (available.length === 0) return;
+      const randomIdx = available[Math.floor(Math.random() * available.length)];
+      text = trivias[randomIdx];
+      const newUsedTrivia = [...usedTriviaIndices, randomIdx];
+      setUsedTriviaIndices(newUsedTrivia);
+      try { localStorage.setItem(LS_USED_TRIVIA_KEY, JSON.stringify(newUsedTrivia)); } catch { /* */ }
+    } else if (categoryKey === "teams") {
+      const teams = findHint<string[]>(playerHints, categoryKey) ?? [];
+      text = teams.join(", ");
+    } else {
+      const val = findHint(playerHints, categoryKey);
+      text = val != null ? String(val) : "";
+    }
+
+    const label = HINT_CATEGORIES.find(c => c.key === categoryKey)!.label;
+    const newChosenHints = [...chosenHints, { label, text }];
+    const newUsedCats = [...usedCategories, categoryKey];
+    const newTokens = hintTokens - 1;
+
+    setChosenHints(newChosenHints);
+    setUsedCategories(newUsedCats);
+    setHintTokens(newTokens);
+    setTokenUsedForGuess(wrongGuessCount);
+
+    try {
+      localStorage.setItem(LS_CHOSEN_HINTS_KEY, JSON.stringify(newChosenHints));
+      localStorage.setItem(LS_USED_CATEGORIES_KEY, JSON.stringify(newUsedCats));
+      localStorage.setItem(LS_HINT_TOKENS_KEY, String(newTokens));
+      localStorage.setItem(LS_TOKEN_USED_GUESS_KEY, String(wrongGuessCount));
+    } catch { /* */ }
+  }, [hintTokens, wrongGuessCount, tokenUsedForGuess, usedCategories, playerHints, usedTriviaIndices, chosenHints]);
 
   useEffect(() => {
     if (!playerToGuess || !currentGameId) return;
@@ -617,24 +674,40 @@ export default function Game() {
     setShowModal(false);
     setTimerStarted(false);
     setElapsedSeconds(0);
+    setHintTokens(MAX_HINT_TOKENS);
+    setChosenHints([]);
+    setUsedCategories([]);
+    setUsedTriviaIndices([]);
+    setTokenUsedForGuess(0);
 
     try {
       const savedElapsed = localStorage.getItem(LS_TIMER_ELAPSED_KEY);
       if (savedElapsed) setElapsedSeconds(parseInt(savedElapsed, 10) || 0);
       if (localStorage.getItem(LS_TIMER_STARTED_KEY) === "1") setTimerStarted(true);
+      const savedTokens = localStorage.getItem(LS_HINT_TOKENS_KEY);
+      if (savedTokens != null) setHintTokens(parseInt(savedTokens, 10));
+      const savedChosen = localStorage.getItem(LS_CHOSEN_HINTS_KEY);
+      if (savedChosen) setChosenHints(JSON.parse(savedChosen));
+      const savedCats = localStorage.getItem(LS_USED_CATEGORIES_KEY);
+      if (savedCats) setUsedCategories(JSON.parse(savedCats));
+      const savedTrivia = localStorage.getItem(LS_USED_TRIVIA_KEY);
+      if (savedTrivia) setUsedTriviaIndices(JSON.parse(savedTrivia));
+      const savedTokenGuess = localStorage.getItem(LS_TOKEN_USED_GUESS_KEY);
+      if (savedTokenGuess != null) setTokenUsedForGuess(parseInt(savedTokenGuess, 10));
     } catch { /* */ }
 
-    const loaded = readStoredGuesses(currentGameId, answer);
+    const loaded = readStoredGuesses(currentGameId, answer, playerList);
     if (!loaded) return;
     const last = loaded.guesses[loaded.guesses.length - 1];
-    const wasStoredWin = last === answer;
+    const wasStoredWin = isSamePlayer(last, answer, playerList);
     const gameDone = wasStoredWin || loaded.guesses.length === MAX_GUESSES;
     const dismissedShare = gameDone && readShareDismissedForPuzzle(currentGameId);
     setGuesses(loaded.guesses);
     setStatuses(loaded.statuses);
     setLetterStatus(letterStatusFromRows(loaded.guesses, loaded.statuses));
     if (dismissedShare) setShareDismissed(true);
-  }, [playerToGuess, currentGameId, answer]);
+    if (wasStoredWin && last !== answer) setAliasWin(true);
+  }, [playerToGuess, currentGameId, answer, playerList]);
 
   useEffect(() => {
     if (!timerStarted || gameOver) return;
@@ -659,9 +732,16 @@ export default function Game() {
         setCurrentFlipCol(currentFlipCol + 1);
       } else {
         const guess    = flippingGuess;
-        const rowStats = flippingStatuses;
         const completedRowIndex = flippingRow ?? 0;
-        persistGuess(currentGameId, completedRowIndex + 1, guess, answer);
+        persistGuess(currentGameId, completedRowIndex + 1, guess, answer, playerList);
+
+        const justWon = isSamePlayer(guess, answer, playerList);
+        const isAlias = justWon && guess !== answer;
+        const rowStats = isAlias
+          ? Array(WORD_LENGTH).fill("correct") as string[]
+          : flippingStatuses;
+
+        if (isAlias) setAliasWin(true);
 
         setGuesses(prev => [...prev, guess]);
         setStatuses(prev => [...prev, rowStats]);
@@ -682,7 +762,6 @@ export default function Game() {
         setCurrentFlipCol(-1);
         setDoneFlipCols(new Set());
 
-        const justWon = guess === answer;
         const justLost = !justWon && completedRowIndex + 1 === MAX_GUESSES;
         if (justWon || justLost) {
           setStats(recordGameResult(justWon, currentGameId));
@@ -731,7 +810,10 @@ export default function Game() {
         return;
       }
 
-      const rowStatuses = getLetterStatuses(currentInput, answer);
+      const isAliasGuess = currentInput !== answer && isSamePlayer(currentInput, answer, playerList);
+      const rowStatuses = isAliasGuess
+        ? Array(WORD_LENGTH).fill("correct") as string[]
+        : getLetterStatuses(currentInput, answer);
       const rowIndex    = guesses.length;
 
       setFlippingRow(rowIndex);
@@ -765,7 +847,7 @@ export default function Game() {
   return (
     <>
       <div className="game-page__content">
-        <PageHeader timerDisplay={formatGameTimer(elapsedSeconds)} />
+        <PageHeader timerDisplay={formatGameTimer(elapsedSeconds)} logoSrc="/stumpd-logo.png" logoAlt="Stumpd" />
         <div className={shellVpClass ? `game-shell ${shellVpClass}` : "game-shell"}>
 
         <div className="game-shell__top">
@@ -861,42 +943,41 @@ export default function Game() {
           aria-live="polite"
         >
           {showHintSlot ? (
-            <div
-              className={`game-hint-card${showAnswerReveal ? " game-hint-card--reveal" : ""}`}
-              role="status"
-            >
-              {showAnswerReveal ? (
-                <div
-                  key={hintContentKey}
-                  className="game-hint-card__content game-hint-card__content--enter"
-                >
+            showAnswerReveal ? (
+              <div className="game-hint-card game-hint-card--reveal" role="status">
+                <div className="game-hint-card__content game-hint-card__content--enter">
                   <p className="game-hint-card__label">Answer</p>
                   <p className="game-hint-card__text">{displayRevealName}</p>
                 </div>
-              ) : showInitialTriviaHint ? (
-                <div
-                  key={hintContentKey}
-                  className="game-hint-card__content game-hint-card__content--enter"
-                >
-                  <p className="game-hint-card__label">Trivia</p>
-                  <p className="game-hint-card__text">{playerHint.trivia}</p>
+              </div>
+            ) : showOpeningHint ? (
+              <div className="game-hint-card" role="status">
+                <div className="game-hint-card__content game-hint-card__content--enter">
+                  <p className="game-hint-card__label">Clue</p>
+                  <p className="game-hint-card__text">{openingHintText}</p>
                 </div>
-              ) : (
-                <div
-                  key={hintContentKey}
-                  className="game-hint-card__content game-hint-card__content--enter"
-                >
-                  <p className="game-hint-card__label">{currentHint.label}</p>
-                  <p className="game-hint-card__text">{currentHint.text}</p>
-                </div>
-              )}
-            </div>
+              </div>
+            ) : showTokenBox ? (
+              <button
+                type="button"
+                className="game-hint-token-box"
+                onClick={() => setShowHintChooser(true)}
+              >
+                <span className="game-hint-token-box__icon" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21h6M12 3a6 6 0 0 0-6 6c0 2.1 1.1 3.8 2.5 5 .7.6 1.2 1.5 1.5 2.5h4c.3-1 .8-1.9 1.5-2.5C16.9 12.8 18 11.1 18 9a6 6 0 0 0-6-6z" /></svg>
+                </span>
+                <span className="game-hint-token-box__label">
+                  {canChooseHint ? "Choose a Hint" : hintTokens > 0 ? "View Hints" : "No Tokens Left"}
+                </span>
+                <span className="game-hint-token-box__tokens">{hintTokens}/{MAX_HINT_TOKENS}</span>
+              </button>
+            ) : null
           ) : null}
         </div>
 
         <div className="game-keyboard-footnote" role="note">
           <p className="game-keyboard-footnote__general">
-            Some player names are shortened to fit 5 letters. Example: RONALDO - RONAL
+            Some player names are shortened to fit 5 letters. Example: YUVRAJ → YUVRA
           </p>
         </div>
         </div>
@@ -904,6 +985,16 @@ export default function Game() {
 
       {gameOver && !isAnimating ? (
         <div className="game-page__see-results">
+          {aliasWin && (
+            <div className="game-alias-win-notice" role="status">
+              <p className="game-alias-win-notice__line">
+                You identified <strong>{displayRevealName}</strong> from the hints!
+              </p>
+              <p className="game-alias-win-notice__word">
+                The word was <strong>{answer.toUpperCase()}</strong>
+              </p>
+            </div>
+          )}
           <button
             type="button"
             className="see-results-btn"
@@ -979,25 +1070,95 @@ export default function Game() {
       </div>
       )}
 
-      <GuessHistoryModal
-        open={showHintHistory}
-        onClose={() => setShowHintHistory(false)}
-        hints={allUnlockedHints}
-        answerRevealed={lost && !isAnimating}
-        answerDisplay={displayRevealName}
-      />
+      {showHintChooser ? (
+        <div className="hint-chooser-root">
+          <div className="hint-chooser-backdrop" onClick={() => setShowHintChooser(false)} role="presentation" aria-hidden />
+          <div className="hint-chooser-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="hint-chooser-close" onClick={() => setShowHintChooser(false)} aria-label="Close">✕</button>
 
-      <HowToPlayModal open={showHowToPlay} onClose={dismissHowToPlay} />
+            <div className="hint-chooser-header">
+              <h2 className="hint-chooser-title">Hints</h2>
+              <div className="hint-chooser-token-counter">
+                {Array.from({ length: MAX_HINT_TOKENS }).map((_, i) => (
+                  <span key={i} className={`hint-chooser-token-dot${i < hintTokens ? " hint-chooser-token-dot--filled" : ""}`} />
+                ))}
+                <span className="hint-chooser-token-text">{hintTokens}/{MAX_HINT_TOKENS}</span>
+              </div>
+            </div>
+
+            <div className="hint-chooser-unlocked">
+              <div className="hint-chooser-hint-row">
+                <span className="hint-chooser-hint-label">Opening Clue</span>
+                <span className="hint-chooser-hint-text">{openingHintText}</span>
+              </div>
+              {chosenHints.map((h, i) => (
+                <div key={i} className="hint-chooser-hint-row hint-chooser-hint-row--chosen">
+                  <span className="hint-chooser-hint-label">{h.label}</span>
+                  <span className="hint-chooser-hint-text">{h.text}</span>
+                </div>
+              ))}
+              {lost && !isAnimating && (
+                <div className="hint-chooser-hint-row hint-chooser-hint-row--answer">
+                  <span className="hint-chooser-hint-label">Answer</span>
+                  <span className="hint-chooser-hint-text">{displayRevealName}</span>
+                </div>
+              )}
+            </div>
+
+            {!gameOver && (
+              <div className="hint-chooser-menu">
+                <p className="hint-chooser-menu-label">
+                  {canChooseHint
+                    ? "Choose a hint to reveal"
+                    : hintTokens > 0
+                      ? "Make another guess to unlock a hint"
+                      : "No tokens remaining"}
+                </p>
+                <div className="hint-chooser-menu-grid">
+                  {HINT_CATEGORIES.map((cat) => {
+                    const isTrivia = cat.key === "trivia";
+                    const isUsed = isTrivia ? isTriviaExhausted : usedCategories.includes(cat.key);
+                    const isDisabled = isUsed || !canChooseHint;
+                    return (
+                      <button
+                        key={cat.key}
+                        type="button"
+                        className={`hint-chooser-cat-btn${isUsed ? " hint-chooser-cat-btn--used" : ""}${isDisabled && !isUsed ? " hint-chooser-cat-btn--locked" : ""}`}
+                        disabled={isDisabled}
+                        onClick={() => handleSelectHint(cat.key)}
+                      >
+                        {cat.label}
+                        {isTrivia && triviaPickCount > 0 && !isTriviaExhausted ? (
+                          <span className="hint-chooser-cat-count" aria-hidden>{triviaPickCount}/{MAX_TRIVIA_PICKS}</span>
+                        ) : null}
+                        {isUsed ? <span className="hint-chooser-cat-check" aria-hidden>✓</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <HowToPlayModal open={showHowToPlay} onClose={dismissHowToPlay}>
+        <StumpdHowToPlay />
+      </HowToPlayModal>
 
       {/* Share modal */}
       {showModal && (
         <ShareModal
           won={won}
-          answer={answer}
+          answer={targetPlayer?.meta?.fullName ?? answer}
           guessCount={guesses.length}
           statuses={statuses}
           stats={stats}
           elapsedSeconds={elapsedSeconds}
+          gameTitle="Stumpd"
+          puzzleDay={puzzleData?.day}
+          hintsUsed={MAX_HINT_TOKENS - hintTokens}
+          maxHints={MAX_HINT_TOKENS}
           onClose={() => {
             setShowModal(false);
             setShareDismissed(true);

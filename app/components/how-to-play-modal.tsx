@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import HowToPlayContent from "./how-to-play-content";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  children?: ReactNode;
 };
 
-export default function HowToPlayModal({ open, onClose }: Props) {
+export default function HowToPlayModal({ open, onClose, children }: Props) {
   const [mounted, setMounted] = useState(false);
 
   useLayoutEffect(() => {
@@ -61,7 +62,7 @@ export default function HowToPlayModal({ open, onClose }: Props) {
         </button>
         <div className="how-to-play-modal-scroll">
           <div className="how-to-play-page how-to-play-modal--embedded">
-            <HowToPlayContent showBackLink={false} />
+            {children ?? <HowToPlayContent showBackLink={false} />}
           </div>
         </div>
       </div>

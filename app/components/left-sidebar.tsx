@@ -11,8 +11,9 @@ import {
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Fraunces } from "next/font/google";
-import { dispatchOpenHowToPlay } from "./how-to-play-open";
+
 
 const kylogBrand = Fraunces({
   subsets: ["latin"],
@@ -23,8 +24,6 @@ const kylogBrand = Fraunces({
 type Props = {
   open: boolean;
   onClose: () => void;
-  /** When false, "How to play" goes to /how-to-play (no in-page modal listener). */
-  showHowToPlay?: boolean;
 };
 
 const noopSubscribe = () => () => {};
@@ -34,8 +33,8 @@ const EXIT_FALLBACK_MS = 420;
 export default function LeftSidebar({
   open,
   onClose,
-  showHowToPlay = true,
 }: Props) {
+  const pathname = usePathname();
   const isClient = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [mounted, setMounted] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -155,9 +154,12 @@ export default function LeftSidebar({
           </div>
         </div>
         <nav className="left-sidebar-nav" aria-label="Site">
+          <p className="left-sidebar-nav-games-label">Games</p>
           <Link
             href="/"
-            className="left-sidebar-link left-sidebar-link--with-icon"
+            className={`left-sidebar-link left-sidebar-link--with-icon${
+              pathname === "/" || pathname === "/games/fifa" ? " left-sidebar-link--active" : ""
+            }`}
             onClick={onClose}
           >
             <span className="left-sidebar-nav-logo-wrap" aria-hidden>
@@ -172,22 +174,25 @@ export default function LeftSidebar({
             </span>
             <span className="left-sidebar-nav-label">FIFA Wordle</span>
           </Link>
-          {showHowToPlay ? (
-            <button
-              type="button"
-              className="left-sidebar-link left-sidebar-link--button"
-              onClick={() => {
-                onClose();
-                dispatchOpenHowToPlay();
-              }}
-            >
-              How to play
-            </button>
-          ) : (
-            <Link href="/how-to-play" className="left-sidebar-link" onClick={onClose}>
-              How to play
-            </Link>
-          )}
+          <Link
+            href="/stumpd"
+            className={`left-sidebar-link left-sidebar-link--with-icon${
+              pathname === "/stumpd" ? " left-sidebar-link--active" : ""
+            }`}
+            onClick={onClose}
+          >
+            <span className="left-sidebar-nav-logo-wrap" aria-hidden>
+              <Image
+                className="left-sidebar-nav-icon"
+                src="/stumpd-logo.png"
+                alt=""
+                width={1024}
+                height={1024}
+                sizes="64px"
+              />
+            </span>
+            <span className="left-sidebar-nav-label">Stumpd</span>
+          </Link>
           <section
             className="left-sidebar-section"
             aria-labelledby="left-sidebar-privacy-settings-heading"

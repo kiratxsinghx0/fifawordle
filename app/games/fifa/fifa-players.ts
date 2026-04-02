@@ -1,3 +1,5 @@
+import { fetchPlayers } from "../../services/fifa-api";
+
 export type PlayerHint = {
   age: number;
   club: string;
@@ -12,10 +14,8 @@ export type PlayerRow = {
   hint: PlayerHint;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://fifabackend-production-2dd4.up.railway.app";
-
 export async function fetchPlayersFromAPI(): Promise<PlayerRow[]> {
-  const res = await fetch(`${API_URL}/api/players`);
+  const res = await fetchPlayers();
   if (!res.ok) throw new Error(`Failed to fetch players: ${res.status}`);
   const json = await res.json();
   const rows: unknown[] = json.data ?? [];

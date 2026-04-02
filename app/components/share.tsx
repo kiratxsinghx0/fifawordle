@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import NextPuzzleTimer from "./timers";
-import type { GameStats } from "./games";
+
+type GameStats = {
+  gamesPlayed: number;
+  gamesWon: number;
+  currentStreak: number;
+  maxStreak: number;
+};
 
 const STATUS_EMOJI: Record<string, string> = {
   correct: "🟩",
@@ -20,6 +26,14 @@ type Props = {
   stats: GameStats;
   elapsedSeconds: number;
   onClose: () => void;
+  /** Stumpd-specific: game title shown in share card (e.g. "Stumpd") */
+  gameTitle?: string;
+  /** Stumpd-specific: puzzle day number */
+  puzzleDay?: number;
+  /** Stumpd-specific: how many hint tokens were spent */
+  hintsUsed?: number;
+  /** Stumpd-specific: maximum hint tokens available */
+  maxHints?: number;
 };
 
 const DISTRIBUTION = [5, 12, 28, 30, 17, 8];
@@ -166,14 +180,35 @@ function SharePreviewCard({
   statuses,
   guessCount,
   summaryLine,
+  gameTitle,
+  puzzleDay,
+  hintsUsed,
+  maxHints,
 }: {
   statuses: string[][];
   guessCount: number;
   summaryLine: string;
+  gameTitle?: string;
+  puzzleDay?: number;
+  hintsUsed?: number;
+  maxHints?: number;
 }) {
   const rows = statuses.slice(0, guessCount);
+  const isStumpd = !!gameTitle;
   return (
-    <div className="share-preview-card">
+    <div className={`share-preview-card${isStumpd ? " share-preview-card--stumpd" : ""}`}>
+      {isStumpd && (
+        <div className="share-preview-card__stumpd-header">
+          <span className="share-preview-card__stumpd-title">
+            {gameTitle} #{puzzleDay ?? "?"}
+          </span>
+          {hintsUsed != null && maxHints != null && (
+            <span className="share-preview-card__stumpd-hints">
+              Hints used: {hintsUsed}/{maxHints}
+            </span>
+          )}
+        </div>
+      )}
       <div className="share-preview-card__grid">
         {rows.map((row, r) => (
           <div key={r} className="share-preview-card__row">
@@ -188,7 +223,7 @@ function SharePreviewCard({
         ))}
       </div>
       <p className="share-preview-card__summary">{summaryLine}</p>
-      <p className="share-preview-card__url">fifawordle.com</p>
+      <p className="share-preview-card__url">{isStumpd ? "fifawordle.com/stumpd" : "fifawordle.com"}</p>
     </div>
   );
 }
@@ -199,10 +234,11 @@ function formatElapsed(totalSeconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-export default function ShareModal({ won, answer, guessCount, statuses, stats, elapsedSeconds, onClose }: Props) {
+export default function ShareModal({ won, answer, guessCount, statuses, stats, elapsedSeconds, onClose, gameTitle, puzzleDay, hintsUsed, maxHints }: Props) {
   void answer;
   void stats;
   const [copied, setCopied] = useState(false);
+  const isStumpd = !!gameTitle;
 
   const topPercent = getTopPercent(guessCount);
   const beatPercent = 100 - topPercent;
@@ -215,14 +251,28 @@ export default function ShareModal({ won, answer, guessCount, statuses, stats, e
     .join("\n");
 
   const timeStr = formatElapsed(elapsedSeconds);
-  const summaryLine = won
-    ? `${guessCount}/6 | Top ${topPercent}% | ⏱ ${timeStr}`
-    : `X/6 | ${correctLetters}/${WORD_LENGTH} letters | ⏱ ${timeStr}`;
+  const summaryLine = isStumpd
+    ? (won
+      ? `${guessCount}/6 | ⏱ ${timeStr}`
+      : `X/6 | ${correctLetters}/${WORD_LENGTH} letters | ⏱ ${timeStr}`)
+    : (won
+      ? `${guessCount}/6 | Top ${topPercent}% | ⏱ ${timeStr}`
+      : `X/6 | ${correctLetters}/${WORD_LENGTH} letters | ⏱ ${timeStr}`);
 
   const handleCopy = () => {
-    const full = won
-      ? ["⚽ FIFA Wordle", `${guessCount}/6 | Top ${topPercent}% | ⏱ ${timeStr}`, "", emojiGrid, "", "🏆 Can you beat me? Prizes up for grabs!", "fifawordle.com"].join("\n")
-      : ["⚽ FIFA Wordle", `X/6 — Almost had it! | ⏱ ${timeStr}`, "", emojiGrid, "", "🏆 Can you beat me? Prizes up for grabs!", "fifawordle.com"].join("\n");
+    let full: string;
+    if (isStumpd) {
+      const header = `🏏 ${gameTitle} #${puzzleDay ?? "?"}`;
+      const hintsLine = hintsUsed != null && maxHints != null ? `Hints used: ${hintsUsed}/${maxHints}` : "";
+      const scoreLine = won
+        ? `${guessCount}/6 | ⏱ ${timeStr}`
+        : `X/6 | ${correctLetters}/${WORD_LENGTH} letters | ⏱ ${timeStr}`;
+      full = [header, hintsLine, scoreLine, "", emojiGrid, "", "Can you beat me?", "stumpd.com"].filter(Boolean).join("\n");
+    } else {
+      full = won
+        ? ["⚽ FIFA Wordle", `${guessCount}/6 | Top ${topPercent}% | ⏱ ${timeStr}`, "", emojiGrid, "", "🏆 Can you beat me? Prizes up for grabs!", "fifawordle.com"].join("\n")
+        : ["⚽ FIFA Wordle", `X/6 — Almost had it! | ⏱ ${timeStr}`, "", emojiGrid, "", "🏆 Can you beat me? Prizes up for grabs!", "fifawordle.com"].join("\n");
+    }
 
     navigator.clipboard.writeText(full).then(() => {
       setCopied(true);
@@ -293,7 +343,15 @@ export default function ShareModal({ won, answer, guessCount, statuses, stats, e
         )}
 
         {/* Visual share card */}
-        <SharePreviewCard statuses={statuses} guessCount={guessCount} summaryLine={summaryLine} />
+        <SharePreviewCard
+          statuses={statuses}
+          guessCount={guessCount}
+          summaryLine={summaryLine}
+          gameTitle={gameTitle}
+          puzzleDay={puzzleDay}
+          hintsUsed={hintsUsed}
+          maxHints={maxHints}
+        />
 
         {/* Share button */}
         <button

@@ -15,9 +15,17 @@ type PageHeaderProps = {
   showHowToPlay?: boolean;
   /** Formatted timer string (e.g. "02:35") displayed in the header on game pages. */
   timerDisplay?: string;
+  /** Override the header logo image (defaults to FIFA Wordle logo). */
+  logoSrc?: string;
+  logoAlt?: string;
 };
 
-export default function PageHeader({ showHowToPlay = true, timerDisplay }: PageHeaderProps) {
+export default function PageHeader({
+  showHowToPlay = true,
+  timerDisplay,
+  logoSrc = "/fifa-wordle-logo.png",
+  logoAlt = "FIFA Wordle",
+}: PageHeaderProps) {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
   const [hintCount, setHintCount] = useState(0);
 
@@ -30,8 +38,8 @@ export default function PageHeader({ showHowToPlay = true, timerDisplay }: PageH
   const logo = (
     <Image
       className="page-title-logo"
-      src="/fifa-wordle-logo.png"
-      alt="FIFA Wordle"
+      src={logoSrc}
+      alt={logoAlt}
       width={1024}
       height={682}
       priority
@@ -186,7 +194,6 @@ export default function PageHeader({ showHowToPlay = true, timerDisplay }: PageH
       <LeftSidebar
         open={leftSidebarOpen}
         onClose={() => setLeftSidebarOpen(false)}
-        showHowToPlay={showHowToPlay}
       />
     </header>
   );
