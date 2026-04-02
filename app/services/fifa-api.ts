@@ -7,6 +7,7 @@ export type PuzzleData = {
   encoded: string;
   hash: string;
   previousHash: string | null;
+  setAt: string;
 };
 
 export async function fetchPlayers(): Promise<Response> {

@@ -73,10 +73,16 @@ function xorDecode(encoded: string, key: string): string {
 }
 
 const LS_PUZZLE_CACHE_KEY = "stumpdpuzzle_cache";
-const LS_PUZZLE_FETCHED_DATE_KEY = "stumpdpuzzle_fetchedDate";
 
-function todayUTCDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+/** 6 AM IST = 00:30 UTC */
+function isPuzzleBeforeTodayCutoff(setAt: string): boolean {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setUTCHours(0, 30, 0, 0);
+  if (now < cutoff) {
+    cutoff.setUTCDate(cutoff.getUTCDate() - 1);
+  }
+  return new Date(setAt) < cutoff;
 }
 
 function readCachedPuzzle(): PuzzleData | null {
@@ -90,30 +96,28 @@ function readCachedPuzzle(): PuzzleData | null {
   }
 }
 
-function isCachedPuzzleStale(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    const fetchedDate = localStorage.getItem(LS_PUZZLE_FETCHED_DATE_KEY);
-    if (!fetchedDate) return true;
-    return fetchedDate !== todayUTCDateString();
-  } catch {
-    return true;
-  }
-}
-
 function cachePuzzle(data: PuzzleData): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(LS_PUZZLE_CACHE_KEY, JSON.stringify(data));
-    localStorage.setItem(LS_PUZZLE_FETCHED_DATE_KEY, todayUTCDateString());
   } catch { /* quota / private mode */ }
 }
 
 async function ensureFreshPuzzle(): Promise<PuzzleData> {
-  if (isCachedPuzzleStale()) {
-    await triggerAutoSet();
+  const cached = readCachedPuzzle();
+
+  if (cached?.setAt && !isPuzzleBeforeTodayCutoff(cached.setAt)) {
+    return fetchPuzzleToday();
   }
-  return fetchPuzzleToday();
+
+  const puzzle = await fetchPuzzleToday();
+
+  if (puzzle.setAt && isPuzzleBeforeTodayCutoff(puzzle.setAt)) {
+    await triggerAutoSet();
+    return fetchPuzzleToday();
+  }
+
+  return puzzle;
 }
 
 const FLIP_DURATION = 340;
@@ -417,7 +421,7 @@ export default function Game() {
 
   useEffect(() => {
     const cached = readCachedPuzzle();
-    if (cached && !isCachedPuzzleStale()) setPuzzleData(cached);
+    if (cached?.setAt && !isPuzzleBeforeTodayCutoff(cached.setAt)) setPuzzleData(cached);
 
     ensureFreshPuzzle()
       .then((fresh) => {
