@@ -466,16 +466,18 @@ export default function Game() {
     setStats(readStats());
 
     let consentDone = false;
+    let rejected = false;
     try {
       const v = localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
       if (v === "accepted" || v === "rejected") {
         setCookieConsentDone(true);
         consentDone = true;
+        rejected = v === "rejected";
       }
     } catch { /* */ }
 
     try {
-      if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") {
+      if (rejected || localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") {
         setHowToPlayDone(true);
       } else if (consentDone) {
         setShowHowToPlay(true);
@@ -510,11 +512,15 @@ export default function Game() {
       const detail = (e as CustomEvent<string>).detail;
       if (detail === "accepted" || detail === "rejected") {
         setCookieConsentDone(true);
-        try {
-          if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) !== "1") {
-            setTimeout(() => setShowHowToPlay(true), 450);
-          }
-        } catch { /* */ }
+        if (detail === "rejected") {
+          setHowToPlayDone(true);
+        } else {
+          try {
+            if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) !== "1") {
+              setTimeout(() => setShowHowToPlay(true), 450);
+            }
+          } catch { /* */ }
+        }
       }
       if (detail !== "accepted") return;
       try { localStorage.setItem(LS_HOW_TO_PLAY_SEEN, "true"); } catch { /* */ }

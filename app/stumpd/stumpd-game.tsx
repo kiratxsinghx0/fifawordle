@@ -15,7 +15,7 @@ import type { PuzzleData } from "../services/ipl-api";
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
 
-const MAX_HINT_TOKENS = 3;
+const MAX_HINT_TOKENS = 4;
 
 const HINT_CATEGORIES = [
   { key: "age", label: "Age" },
@@ -110,7 +110,13 @@ async function ensureFreshPuzzle(): Promise<PuzzleData> {
     return fetchPuzzleToday();
   }
 
-  const puzzle = await fetchPuzzleToday();
+  let puzzle: PuzzleData;
+  try {
+    puzzle = await fetchPuzzleToday();
+  } catch {
+    await triggerAutoSet();
+    return fetchPuzzleToday();
+  }
 
   if (puzzle.setAt && isPuzzleBeforeTodayCutoff(puzzle.setAt)) {
     await triggerAutoSet();
@@ -494,16 +500,18 @@ export default function Game() {
     setStats(readStats());
 
     let consentDone = false;
+    let rejected = false;
     try {
       const v = localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
       if (v === "accepted" || v === "rejected") {
         setCookieConsentDone(true);
         consentDone = true;
+        rejected = v === "rejected";
       }
     } catch { /* */ }
 
     try {
-      if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") {
+      if (rejected || localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) === "1") {
         setHowToPlayDone(true);
       } else if (consentDone) {
         setShowHowToPlay(true);
@@ -538,11 +546,15 @@ export default function Game() {
       const detail = (e as CustomEvent<string>).detail;
       if (detail === "accepted" || detail === "rejected") {
         setCookieConsentDone(true);
-        try {
-          if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) !== "1") {
-            setTimeout(() => setShowHowToPlay(true), 450);
-          }
-        } catch { /* */ }
+        if (detail === "rejected") {
+          setHowToPlayDone(true);
+        } else {
+          try {
+            if (localStorage.getItem(LS_HOW_TO_PLAY_DISMISSED) !== "1") {
+              setTimeout(() => setShowHowToPlay(true), 450);
+            }
+          } catch { /* */ }
+        }
       }
       if (detail !== "accepted") return;
       try { localStorage.setItem(LS_HOW_TO_PLAY_SEEN, "true"); } catch { /* */ }
@@ -956,7 +968,7 @@ export default function Game() {
             ) : showTokenBox ? (
               <button
                 type="button"
-                className="game-hint-token-box"
+                className={`game-hint-token-box${canChooseHint && !showHintChooser ? " game-hint-token-box--nudge" : ""}`}
                 onClick={() => setShowHintChooser(true)}
               >
                 <span className="game-hint-token-box__icon" aria-hidden>
@@ -1110,11 +1122,12 @@ export default function Game() {
               <div className="hint-chooser-menu">
                 <p className="hint-chooser-menu-label">
                   {canChooseHint
-                    ? "Choose a hint to reveal"
+                    ? "Choose a hint to reveal" 
                     : hintTokens > 0
                       ? "Make another guess to unlock a hint"
                       : "No tokens remaining"}
                 </p>
+                <p className="hint-chooser-menu-sublabel">Hints are based on the player you&apos;re guessing</p>
                 <div className="hint-chooser-menu-grid">
                   {HINT_CATEGORIES.map((cat) => {
                     const isTrivia = cat.key === "trivia";

@@ -953,6 +953,23 @@ a.page-header-icon-btn {
   box-shadow: none;
 }
 
+@keyframes hint-nudge {
+  0%   { transform: scale(1);      box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.45); }
+  40%  { transform: scale(1.04);   box-shadow: 0 0 0 8px rgba(5, 150, 105, 0); }
+  60%  { transform: scale(0.98);   box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+  80%  { transform: scale(1.015);  box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+  100% { transform: scale(1);      box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+}
+
+.game-hint-token-box--nudge {
+  animation: hint-nudge 1.8s ease-in-out infinite;
+  border-color: #059669;
+}
+
+.game-hint-token-box--nudge:hover {
+  animation: none;
+}
+
 .game-hint-token-box__icon {
   display: flex;
   align-items: center;
@@ -1171,13 +1188,22 @@ a.page-header-icon-btn {
 }
 
 .hint-chooser-menu-label {
-  margin: 0 0 10px;
+  margin: 0 0 4px;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: #6b7280;
   text-align: center;
+}
+
+.hint-chooser-menu-sublabel {
+  margin: 0 0 10px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: #9ca3af;
+  text-align: center;
+  letter-spacing: 0.03em;
 }
 
 .hint-chooser-menu-grid {

@@ -101,6 +101,35 @@ export default function StumpdHowToPlay() {
       </div>
 
       <section
+        className="legal-page__section how-to-play-page__examples"
+        aria-labelledby="how-examples"
+      >
+        <h2 id="how-examples">Examples</h2>
+
+        <div className="how-to-play-example">
+          <ExampleRow word="VIRAT" index={0} kind="correct" flipDelayMs={0} />
+          <p className="how-to-play-example__caption">
+            The letter <strong>V</strong> is in the word and in the correct
+            spot.
+          </p>
+        </div>
+
+        <div className="how-to-play-example">
+          <ExampleRow word="DHONI" index={2} kind="present" flipDelayMs={320} />
+          <p className="how-to-play-example__caption">
+            The letter <strong>O</strong> is in the word but in the wrong spot.
+          </p>
+        </div>
+
+        <div className="how-to-play-example">
+          <ExampleRow word="YUVRA" index={4} kind="absent" flipDelayMs={640} />
+          <p className="how-to-play-example__caption">
+            The letter <strong>A</strong> is not in the word in any spot.
+          </p>
+        </div>
+      </section>
+
+      <section
         className="legal-page__section how-to-play-page__hints-section"
         aria-labelledby="how-hints"
       >
@@ -129,35 +158,6 @@ export default function StumpdHowToPlay() {
               <span className="stumpd-hint-chip__text">Age</span>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section
-        className="legal-page__section how-to-play-page__examples"
-        aria-labelledby="how-examples"
-      >
-        <h2 id="how-examples">Examples</h2>
-
-        <div className="how-to-play-example">
-          <ExampleRow word="VIRAT" index={0} kind="correct" flipDelayMs={0} />
-          <p className="how-to-play-example__caption">
-            The letter <strong>V</strong> is in the word and in the correct
-            spot.
-          </p>
-        </div>
-
-        <div className="how-to-play-example">
-          <ExampleRow word="DHONI" index={2} kind="present" flipDelayMs={320} />
-          <p className="how-to-play-example__caption">
-            The letter <strong>O</strong> is in the word but in the wrong spot.
-          </p>
-        </div>
-
-        <div className="how-to-play-example">
-          <ExampleRow word="YUVRA" index={4} kind="absent" flipDelayMs={640} />
-          <p className="how-to-play-example__caption">
-            The letter <strong>A</strong> is not in the word in any spot.
-          </p>
         </div>
       </section>
 
