@@ -589,8 +589,7 @@ export default function Game() {
 
   const showOpeningHint = !!targetPlayer && guesses.length === 0;
   const showTokenBox = !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
-  const showAnswerReveal = !!targetPlayer && lost && !isAnimating && !(gameOver && shareDismissed);
-  const showHintSlot = showOpeningHint || showTokenBox || showAnswerReveal;
+  const showHintSlot = showOpeningHint || showTokenBox;
 
   const displayRevealName =
     targetPlayer?.meta?.fullName ??
@@ -943,14 +942,7 @@ export default function Game() {
           aria-live="polite"
         >
           {showHintSlot ? (
-            showAnswerReveal ? (
-              <div className="game-hint-card game-hint-card--reveal" role="status">
-                <div className="game-hint-card__content game-hint-card__content--enter">
-                  <p className="game-hint-card__label">Answer</p>
-                  <p className="game-hint-card__text">{displayRevealName}</p>
-                </div>
-              </div>
-            ) : showOpeningHint ? (
+            showOpeningHint ? (
               <div className="game-hint-card" role="status">
                 <div className="game-hint-card__content game-hint-card__content--enter">
                   <p className="game-hint-card__label">Clue</p>
@@ -985,16 +977,21 @@ export default function Game() {
 
       {gameOver && !isAnimating ? (
         <div className="game-page__see-results">
-          {aliasWin && (
-            <div className="game-alias-win-notice" role="status">
-              <p className="game-alias-win-notice__line">
-                You identified <strong>{displayRevealName}</strong> from the hints!
+          <div className={`game-result-notice${won ? " game-result-notice--won" : " game-result-notice--lost"}`} role="status">
+            <p className="game-result-notice__name">
+              {won ? "🎉 " : ""}<strong>{displayRevealName}</strong>
+            </p>
+            {aliasWin && (
+              <p className="game-result-notice__alias">
+                You guessed it from hints! The word was <strong>{answer.toUpperCase()}</strong>
               </p>
-              <p className="game-alias-win-notice__word">
+            )}
+            {!won && (
+              <p className="game-result-notice__alias">
                 The word was <strong>{answer.toUpperCase()}</strong>
               </p>
-            </div>
-          )}
+            )}
+          </div>
           <button
             type="button"
             className="see-results-btn"

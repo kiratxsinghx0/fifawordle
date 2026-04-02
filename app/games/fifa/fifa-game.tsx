@@ -559,20 +559,14 @@ export default function Game() {
   const showProgressiveHints =
     !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
 
-  /** After a loss, reveal the player in the hint card (above keyboard, not in the grid). */
-  const showAnswerReveal =
-    !!targetPlayer && lost && !isAnimating && !(gameOver && shareDismissed);
-
   /** Stable key for animated hint body — changes only after a guess row commits, not mid-flip. */
-  const hintContentKey = showAnswerReveal
-    ? "answer"
-    : showInitialTriviaHint
-      ? "trivia"
-      : `prog-${wrongGuessCount}`;
+  const hintContentKey = showInitialTriviaHint
+    ? "trivia"
+    : `prog-${wrongGuessCount}`;
   const showHintSlot =
-    showInitialTriviaHint || showProgressiveHints || showAnswerReveal;
+    showInitialTriviaHint || showProgressiveHints;
   const displayRevealName =
-    nameNotice ??
+    targetPlayer?.meta?.fullName ??
     `${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`;
 
   const playerHint = targetPlayer?.hint ?? defaultHint;
@@ -847,18 +841,10 @@ export default function Game() {
         >
           {showHintSlot ? (
             <div
-              className={`game-hint-card${showAnswerReveal ? " game-hint-card--reveal" : ""}`}
+              className="game-hint-card"
               role="status"
             >
-              {showAnswerReveal ? (
-                <div
-                  key={hintContentKey}
-                  className="game-hint-card__content game-hint-card__content--enter"
-                >
-                  <p className="game-hint-card__label">Answer</p>
-                  <p className="game-hint-card__text">{displayRevealName}</p>
-                </div>
-              ) : showInitialTriviaHint ? (
+              {showInitialTriviaHint ? (
                 <div
                   key={hintContentKey}
                   className="game-hint-card__content game-hint-card__content--enter"
@@ -889,6 +875,16 @@ export default function Game() {
 
       {gameOver && !isAnimating ? (
         <div className="game-page__see-results">
+          <div className={`game-result-notice${won ? " game-result-notice--won" : " game-result-notice--lost"}`} role="status">
+            <p className="game-result-notice__name">
+              {won ? "🎉 " : ""}<strong>{displayRevealName}</strong>
+            </p>
+            {!won && (
+              <p className="game-result-notice__alias">
+                The word was <strong>{answer.toUpperCase()}</strong>
+              </p>
+            )}
+          </div>
           <button
             type="button"
             className="see-results-btn"

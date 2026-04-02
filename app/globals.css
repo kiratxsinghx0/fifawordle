@@ -3516,31 +3516,39 @@ main.how-to-play-page.legal-page article.legal-page__inner {
   gap: 12px;
 }
 
-/* ── Alias-win notice (guessed same player via different name) ── */
-.game-alias-win-notice {
+/* ── Game result notice (shown above See Results for win & loss) ── */
+.game-result-notice {
   text-align: center;
-  background: linear-gradient(135deg, #f0fdf4, #e8f5e9);
-  border: 1px solid #6aaa64;
   border-radius: 12px;
   padding: 12px 20px;
   max-width: 320px;
   width: 100%;
-  animation: alias-notice-enter 0.4s ease-out;
+  animation: result-notice-enter 0.4s ease-out;
 }
 
-.game-alias-win-notice__line {
+.game-result-notice--won {
+  background: linear-gradient(135deg, #f0fdf4, #e8f5e9);
+  border: 1px solid #6aaa64;
+}
+
+.game-result-notice--lost {
+  background: linear-gradient(135deg, #fef9f0, #fdf0e0);
+  border: 1px solid #c9b458;
+}
+
+.game-result-notice__name {
   margin: 0 0 4px;
-  font-size: 0.95rem;
-  color: #1a3a1a;
+  font-size: 1.05rem;
+  color: #1a1a1a;
 }
 
-.game-alias-win-notice__word {
+.game-result-notice__alias {
   margin: 0;
-  font-size: 0.88rem;
-  color: #3a5a3a;
+  font-size: 0.85rem;
+  color: #555;
 }
 
-@keyframes alias-notice-enter {
+@keyframes result-notice-enter {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
