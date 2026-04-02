@@ -263,15 +263,15 @@ export default function ShareModal({ won, answer, guessCount, statuses, stats, e
     let full: string;
     if (isStumpd) {
       const header = `🏏 ${gameTitle} #${puzzleDay ?? "?"}`;
-      const hintsLine = hintsUsed != null && maxHints != null ? `Hints used: ${hintsUsed}/${maxHints}` : "";
+      const hintsLine = hintsUsed != null && maxHints != null ? `\nHints used: ${hintsUsed}/${maxHints}` : "";
       const scoreLine = won
         ? `${guessCount}/6 | ⏱ ${timeStr}`
         : `X/6 | ${correctLetters}/${WORD_LENGTH} letters | ⏱ ${timeStr}`;
-      full = [header, hintsLine, scoreLine, "", emojiGrid, "", "Can you beat me?", "stumpd.com"].filter(Boolean).join("\n");
+      full = `${header}${hintsLine}\n${scoreLine}\n\n${emojiGrid}\n\nCan you beat me?\n${window.location.href}`;
     } else {
       full = won
-        ? ["⚽ FIFA Wordle", `${guessCount}/6 | Top ${topPercent}% | ⏱ ${timeStr}`, "", emojiGrid, "", "🏆 Can you beat me? Prizes up for grabs!", "fifawordle.com"].join("\n")
-        : ["⚽ FIFA Wordle", `X/6 — Almost had it! | ⏱ ${timeStr}`, "", emojiGrid, "", "🏆 Can you beat me? Prizes up for grabs!", "fifawordle.com"].join("\n");
+        ? ["⚽ FIFA Wordle", `${guessCount}/6 | Top ${topPercent}% | ⏱ ${timeStr}`, "", "", emojiGrid, "", "", "🏆 Can you beat me? Prizes up for grabs!", window.location.href].join("\n")
+        : ["⚽ FIFA Wordle", `X/6 — Almost had it! | ⏱ ${timeStr}`, "", "", emojiGrid, "", "", "🏆 Can you beat me? Prizes up for grabs!", window.location.href].join("\n");
     }
 
     navigator.clipboard.writeText(full).then(() => {
