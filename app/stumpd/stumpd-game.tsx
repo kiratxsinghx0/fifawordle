@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import ShareModal from "../components/share";
 import HowToPlayModal from "../components/how-to-play-modal";
+import GuessHistoryModal from "../components/guess-history-modal";
 import StumpdHowToPlay from "./stumpd-how-to-play";
 import PageHeader, { OPEN_HOW_TO_PLAY_EVENT, OPEN_HINT_HISTORY_EVENT } from "../components/page-header";
 import { dispatchHintCountUpdate } from "../components/hint-history-open";
@@ -15,18 +16,14 @@ import type { PuzzleData } from "../services/ipl-api";
 /** Optional display metadata when the playable 5-letter token is an abbreviation. */
 export type PlayerNameMeta = { shortened: true; fullName: string };
 
-const MAX_HINT_TOKENS = 4;
-
-const HINT_CATEGORIES = [
-  { key: "age", label: "Age" },
-  { key: "country", label: "Country" },
-  { key: "iplTeam", label: "IPL Team" },
-  { key: "role", label: "Role" },
-  { key: "teams", label: "Teams" },
-  { key: "batting", label: "Batting" },
-  { key: "bowling", label: "Bowling" },
-  { key: "trivia", label: "Trivia" },
-] as const;
+/** Fixed hint ladder: one hint auto-revealed per wrong guess in this order. */
+const HINT_LADDER: { key: string; label: string }[] = [
+  { key: "iplTeam+country", label: "IPL Team & Nationality" },
+  { key: "trivia",          label: "Trivia" },
+  { key: "trivia",          label: "Trivia" },
+  { key: "role",            label: "Role" },
+  { key: "trivia",          label: "Trivia" },
+];
 
 const LS_HOW_TO_PLAY_DISMISSED = "stumpdpuzzle_howToPlayDismissed";
 const LS_HOW_TO_PLAY_SEEN = "stumpdpuzzle_howToPlaySeen";
@@ -175,11 +172,7 @@ const LS_SHARE_DISMISSED_PUZZLE_KEY = "stumpdpuzzle_shareDismissedPuzzleId";
 const LS_UNLOCKED_HINTS_KEY = "stumpdpuzzle_unlockedHints";
 const LS_TIMER_ELAPSED_KEY = "stumpdpuzzle_timerElapsed";
 const LS_TIMER_STARTED_KEY = "stumpdpuzzle_timerStarted";
-const LS_HINT_TOKENS_KEY = "stumpdpuzzle_hintTokensRemaining";
-const LS_CHOSEN_HINTS_KEY = "stumpdpuzzle_chosenHints2";
-const LS_USED_CATEGORIES_KEY = "stumpdpuzzle_usedCategories";
 const LS_USED_TRIVIA_KEY = "stumpdpuzzle_usedTriviaIndices";
-const LS_TOKEN_USED_GUESS_KEY = "stumpdpuzzle_tokenUsedForGuess";
 
 const GAME_STORAGE_KEYS = [
   LS_GUESS_KEY,
@@ -189,11 +182,7 @@ const GAME_STORAGE_KEYS = [
   LS_UNLOCKED_HINTS_KEY,
   LS_TIMER_ELAPSED_KEY,
   LS_TIMER_STARTED_KEY,
-  LS_HINT_TOKENS_KEY,
-  LS_CHOSEN_HINTS_KEY,
-  LS_USED_CATEGORIES_KEY,
   LS_USED_TRIVIA_KEY,
-  LS_TOKEN_USED_GUESS_KEY,
 ] as const;
 
 /** ── Persistent stats (survive across puzzles) ── */
@@ -453,15 +442,11 @@ export default function Game() {
   const [message,       setMessage]       = useState("");
   const [showModal,     setShowModal]     = useState(false);
   const [showHowToPlay, setShowHowToPlay]  = useState(false);
-  const [showHintChooser, setShowHintChooser] = useState(false);
+  const [showHintHistory, setShowHintHistory] = useState(false);
   const [shareDismissed, setShareDismissed] = useState(false);
   /** Cookie accepted + how to play seen — enables initial trivia before first guess (client-read). */
   const [returningUserHints, setReturningUserHints] = useState(false);
-  const [hintTokens, setHintTokens] = useState(MAX_HINT_TOKENS);
-  const [chosenHints, setChosenHints] = useState<{ label: string; text: string }[]>([]);
-  const [usedCategories, setUsedCategories] = useState<string[]>([]);
   const [usedTriviaIndices, setUsedTriviaIndices] = useState<number[]>([]);
-  const [tokenUsedForGuess, setTokenUsedForGuess] = useState(0);
   const [stats, setStats] = useState<GameStats>(DEFAULT_STATS);
   const [timerStarted, setTimerStarted] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -571,19 +556,12 @@ export default function Game() {
     return () => window.removeEventListener(OPEN_HOW_TO_PLAY_EVENT, onOpenFromHeader);
   }, []);
 
-  /** Header hint button opens hint chooser modal. */
+  /** Header hint button opens hint history modal. */
   useEffect(() => {
-    const onOpenHints = () => setShowHintChooser(true);
+    const onOpenHints = () => setShowHintHistory(true);
     window.addEventListener(OPEN_HINT_HISTORY_EVENT, onOpenHints);
     return () => window.removeEventListener(OPEN_HINT_HISTORY_EVENT, onOpenHints);
   }, []);
-
-  useEffect(() => {
-    if (!showHintChooser) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowHintChooser(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showHintChooser]);
 
   // Animation state
   const [flippingRow,      setFlippingRow]      = useState<number | null>(null);
@@ -604,77 +582,90 @@ export default function Game() {
   const playerHints: IplHintEntry[] = targetPlayer?.hints ?? [];
 
   const showOpeningHint = !!targetPlayer && guesses.length === 0;
-  const showTokenBox = !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
-  const showHintSlot = showOpeningHint || showTokenBox;
+  const showProgressiveHint = !!targetPlayer && wrongGuessCount >= 1 && !won && !lost && !(gameOver && shareDismissed);
+  const showHintSlot = showOpeningHint || showProgressiveHint;
 
   const displayRevealName =
     targetPlayer?.meta?.fullName ??
     `${answer.charAt(0).toUpperCase()}${answer.slice(1).toLowerCase()}`;
 
   const openingHintText = String(findHint(playerHints, "openingHint") ?? "");
-  const canChooseHint = hintTokens > 0 && wrongGuessCount > 0 && tokenUsedForGuess < wrongGuessCount;
+
+  /**
+   * Resolve a single ladder tier's text. For trivia slots, use the stored random
+   * index so refreshing the page gives the same trivia.
+   */
+  const resolveHintTier = useCallback((tier: number, storedTrivia: number[]): { label: string; text: string } => {
+    const { key, label } = HINT_LADDER[Math.min(tier, HINT_LADDER.length - 1)];
+    if (key === "trivia") {
+      const trivias = collectTrivias(playerHints);
+      let triviaSlotIdx = 0;
+      for (let t = 0; t < tier; t++) {
+        if (HINT_LADDER[t]?.key === "trivia") triviaSlotIdx++;
+      }
+      const idx = storedTrivia[triviaSlotIdx];
+      return { label, text: idx != null && trivias[idx] ? trivias[idx] : "" };
+    }
+    if (key === "iplTeam+country") {
+      const team = findHint(playerHints, "iplTeam") ?? "";
+      const country = findHint(playerHints, "country") ?? "";
+      return { label, text: `${team} · ${country}` };
+    }
+    if (key === "teams") {
+      const teams = findHint<string[]>(playerHints, key) ?? [];
+      return { label, text: teams.join(", ") };
+    }
+    const val = findHint(playerHints, key);
+    return { label, text: val != null ? String(val) : "" };
+  }, [playerHints]);
+
+  /** Pick a random trivia index (not yet used) and persist it. */
+  const pickAndStoreTriviaIndex = useCallback((currentUsed: number[]): number[] => {
+    const trivias = collectTrivias(playerHints);
+    const available = trivias.map((_, i) => i).filter(i => !currentUsed.includes(i));
+    if (available.length === 0) return currentUsed;
+    const randomIdx = available[Math.floor(Math.random() * available.length)];
+    const next = [...currentUsed, randomIdx];
+    setUsedTriviaIndices(next);
+    try { localStorage.setItem(LS_USED_TRIVIA_KEY, JSON.stringify(next)); } catch { /* */ }
+    return next;
+  }, [playerHints]);
+
+  /** Auto-pick trivia indices when wrongGuessCount grows into a trivia tier. */
+  useEffect(() => {
+    if (wrongGuessCount === 0) return;
+    let needed = 0;
+    for (let t = 0; t < Math.min(wrongGuessCount, HINT_LADDER.length); t++) {
+      if (HINT_LADDER[t].key === "trivia") needed++;
+    }
+    if (needed <= usedTriviaIndices.length) return;
+    let current = [...usedTriviaIndices];
+    while (current.length < needed) {
+      current = pickAndStoreTriviaIndex(current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wrongGuessCount]);
+
+  const currentHint = showProgressiveHint
+    ? resolveHintTier(wrongGuessCount - 1, usedTriviaIndices)
+    : null;
+
+  const hintContentKey = showOpeningHint
+    ? "opening"
+    : `prog-${wrongGuessCount}`;
 
   const allUnlockedHints: { label: string; text: string }[] = [
     { label: "Opening Clue", text: openingHintText },
-    ...chosenHints,
   ];
+  for (let i = 1; i <= wrongGuessCount; i++) {
+    allUnlockedHints.push(resolveHintTier(i - 1, usedTriviaIndices));
+  }
 
   useEffect(() => {
     persistUnlockedHints(allUnlockedHints);
     dispatchHintCountUpdate(allUnlockedHints.length);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosenHints.length]);
-
-  const MAX_TRIVIA_PICKS = 2;
-  const triviaPickCount = usedCategories.filter(k => k === "trivia").length;
-  const isTriviaExhausted = triviaPickCount >= MAX_TRIVIA_PICKS || usedTriviaIndices.length >= collectTrivias(playerHints).length;
-
-  const handleSelectHint = useCallback((categoryKey: string) => {
-    if (hintTokens <= 0 || wrongGuessCount <= 0) return;
-    if (tokenUsedForGuess >= wrongGuessCount) return;
-
-    const isTrivia = categoryKey === "trivia";
-    if (!isTrivia && usedCategories.includes(categoryKey)) return;
-    if (isTrivia) {
-      const picks = usedCategories.filter(k => k === "trivia").length;
-      if (picks >= MAX_TRIVIA_PICKS) return;
-    }
-
-    let text = "";
-    if (isTrivia) {
-      const trivias = collectTrivias(playerHints);
-      const available = trivias.map((_, i) => i).filter(i => !usedTriviaIndices.includes(i));
-      if (available.length === 0) return;
-      const randomIdx = available[Math.floor(Math.random() * available.length)];
-      text = trivias[randomIdx];
-      const newUsedTrivia = [...usedTriviaIndices, randomIdx];
-      setUsedTriviaIndices(newUsedTrivia);
-      try { localStorage.setItem(LS_USED_TRIVIA_KEY, JSON.stringify(newUsedTrivia)); } catch { /* */ }
-    } else if (categoryKey === "teams") {
-      const teams = findHint<string[]>(playerHints, categoryKey) ?? [];
-      text = teams.join(", ");
-    } else {
-      const val = findHint(playerHints, categoryKey);
-      text = val != null ? String(val) : "";
-    }
-
-    const label = HINT_CATEGORIES.find(c => c.key === categoryKey)!.label;
-    const newChosenHints = [...chosenHints, { label, text }];
-    const newUsedCats = [...usedCategories, categoryKey];
-    const newTokens = hintTokens - 1;
-
-    setChosenHints(newChosenHints);
-    setUsedCategories(newUsedCats);
-    setHintTokens(newTokens);
-    setTokenUsedForGuess(wrongGuessCount);
-
-    try {
-      localStorage.setItem(LS_CHOSEN_HINTS_KEY, JSON.stringify(newChosenHints));
-      localStorage.setItem(LS_USED_CATEGORIES_KEY, JSON.stringify(newUsedCats));
-      localStorage.setItem(LS_HINT_TOKENS_KEY, String(newTokens));
-      localStorage.setItem(LS_TOKEN_USED_GUESS_KEY, String(wrongGuessCount));
-    } catch { /* */ }
-  }, [hintTokens, wrongGuessCount, tokenUsedForGuess, usedCategories, playerHints, usedTriviaIndices, chosenHints]);
+  }, [wrongGuessCount]);
 
   useEffect(() => {
     if (!playerToGuess || !currentGameId) return;
@@ -689,26 +680,14 @@ export default function Game() {
     setShowModal(false);
     setTimerStarted(false);
     setElapsedSeconds(0);
-    setHintTokens(MAX_HINT_TOKENS);
-    setChosenHints([]);
-    setUsedCategories([]);
     setUsedTriviaIndices([]);
-    setTokenUsedForGuess(0);
 
     try {
       const savedElapsed = localStorage.getItem(LS_TIMER_ELAPSED_KEY);
       if (savedElapsed) setElapsedSeconds(parseInt(savedElapsed, 10) || 0);
       if (localStorage.getItem(LS_TIMER_STARTED_KEY) === "1") setTimerStarted(true);
-      const savedTokens = localStorage.getItem(LS_HINT_TOKENS_KEY);
-      if (savedTokens != null) setHintTokens(parseInt(savedTokens, 10));
-      const savedChosen = localStorage.getItem(LS_CHOSEN_HINTS_KEY);
-      if (savedChosen) setChosenHints(JSON.parse(savedChosen));
-      const savedCats = localStorage.getItem(LS_USED_CATEGORIES_KEY);
-      if (savedCats) setUsedCategories(JSON.parse(savedCats));
       const savedTrivia = localStorage.getItem(LS_USED_TRIVIA_KEY);
       if (savedTrivia) setUsedTriviaIndices(JSON.parse(savedTrivia));
-      const savedTokenGuess = localStorage.getItem(LS_TOKEN_USED_GUESS_KEY);
-      if (savedTokenGuess != null) setTokenUsedForGuess(parseInt(savedTokenGuess, 10));
     } catch { /* */ }
 
     const loaded = readStoredGuesses(currentGameId, answer, playerList);
@@ -958,28 +937,19 @@ export default function Game() {
           aria-live="polite"
         >
           {showHintSlot ? (
-            showOpeningHint ? (
-              <div className="game-hint-card" role="status">
-                <div className="game-hint-card__content game-hint-card__content--enter">
+            <div className="game-hint-card" role="status">
+              {showOpeningHint ? (
+                <div key={hintContentKey} className="game-hint-card__content game-hint-card__content--enter">
                   <p className="game-hint-card__label">Clue</p>
                   <p className="game-hint-card__text">{openingHintText}</p>
                 </div>
-              </div>
-            ) : showTokenBox ? (
-              <button
-                type="button"
-                className={`game-hint-token-box${canChooseHint && !showHintChooser ? " game-hint-token-box--nudge" : ""}`}
-                onClick={() => setShowHintChooser(true)}
-              >
-                <span className="game-hint-token-box__icon" aria-hidden>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21h6M12 3a6 6 0 0 0-6 6c0 2.1 1.1 3.8 2.5 5 .7.6 1.2 1.5 1.5 2.5h4c.3-1 .8-1.9 1.5-2.5C16.9 12.8 18 11.1 18 9a6 6 0 0 0-6-6z" /></svg>
-                </span>
-                <span className="game-hint-token-box__label">
-                  {canChooseHint ? "Choose a Hint" : hintTokens > 0 ? "View Hints" : "No Tokens Left"}
-                </span>
-                <span className="game-hint-token-box__tokens">{hintTokens}/{MAX_HINT_TOKENS}</span>
-              </button>
-            ) : null
+              ) : currentHint ? (
+                <div key={hintContentKey} className="game-hint-card__content game-hint-card__content--enter">
+                  <p className="game-hint-card__label">{currentHint.label}</p>
+                  <p className="game-hint-card__text">{currentHint.text}</p>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -1083,78 +1053,13 @@ export default function Game() {
       </div>
       )}
 
-      {showHintChooser ? (
-        <div className="hint-chooser-root">
-          <div className="hint-chooser-backdrop" onClick={() => setShowHintChooser(false)} role="presentation" aria-hidden />
-          <div className="hint-chooser-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="hint-chooser-close" onClick={() => setShowHintChooser(false)} aria-label="Close">✕</button>
-
-            <div className="hint-chooser-header">
-              <h2 className="hint-chooser-title">Hints</h2>
-              <div className="hint-chooser-token-counter">
-                {Array.from({ length: MAX_HINT_TOKENS }).map((_, i) => (
-                  <span key={i} className={`hint-chooser-token-dot${i < hintTokens ? " hint-chooser-token-dot--filled" : ""}`} />
-                ))}
-                <span className="hint-chooser-token-text">{hintTokens}/{MAX_HINT_TOKENS}</span>
-              </div>
-            </div>
-
-            <div className="hint-chooser-unlocked">
-              <div className="hint-chooser-hint-row">
-                <span className="hint-chooser-hint-label">Opening Clue</span>
-                <span className="hint-chooser-hint-text">{openingHintText}</span>
-              </div>
-              {chosenHints.map((h, i) => (
-                <div key={i} className="hint-chooser-hint-row hint-chooser-hint-row--chosen">
-                  <span className="hint-chooser-hint-label">{h.label}</span>
-                  <span className="hint-chooser-hint-text">{h.text}</span>
-                </div>
-              ))}
-              {lost && !isAnimating && (
-                <div className="hint-chooser-hint-row hint-chooser-hint-row--answer">
-                  <span className="hint-chooser-hint-label">Answer</span>
-                  <span className="hint-chooser-hint-text">{displayRevealName}</span>
-                </div>
-              )}
-            </div>
-
-            {!gameOver && (
-              <div className="hint-chooser-menu">
-                <p className="hint-chooser-menu-label">
-                  {canChooseHint
-                    ? "Choose a hint to reveal" 
-                    : hintTokens > 0
-                      ? "Make another guess to unlock a hint"
-                      : "No tokens remaining"}
-                </p>
-                <p className="hint-chooser-menu-sublabel">Hints are based on the player you&apos;re guessing</p>
-                <div className="hint-chooser-menu-grid">
-                  {HINT_CATEGORIES.map((cat) => {
-                    const isTrivia = cat.key === "trivia";
-                    const isUsed = isTrivia ? isTriviaExhausted : usedCategories.includes(cat.key);
-                    const isDisabled = isUsed || !canChooseHint;
-                    return (
-                      <button
-                        key={cat.key}
-                        type="button"
-                        className={`hint-chooser-cat-btn${isUsed ? " hint-chooser-cat-btn--used" : ""}${isDisabled && !isUsed ? " hint-chooser-cat-btn--locked" : ""}`}
-                        disabled={isDisabled}
-                        onClick={() => handleSelectHint(cat.key)}
-                      >
-                        {cat.label}
-                        {isTrivia && triviaPickCount > 0 && !isTriviaExhausted ? (
-                          <span className="hint-chooser-cat-count" aria-hidden>{triviaPickCount}/{MAX_TRIVIA_PICKS}</span>
-                        ) : null}
-                        {isUsed ? <span className="hint-chooser-cat-check" aria-hidden>✓</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+      <GuessHistoryModal
+        open={showHintHistory}
+        onClose={() => setShowHintHistory(false)}
+        hints={allUnlockedHints}
+        answerRevealed={lost && !isAnimating}
+        answerDisplay={displayRevealName}
+      />
 
       <HowToPlayModal open={showHowToPlay} onClose={dismissHowToPlay}>
         <StumpdHowToPlay />
@@ -1171,8 +1076,8 @@ export default function Game() {
           elapsedSeconds={elapsedSeconds}
           gameTitle="Stumpd"
           puzzleDay={puzzleData?.day}
-          hintsUsed={MAX_HINT_TOKENS - hintTokens}
-          maxHints={MAX_HINT_TOKENS}
+          hintsUsed={allUnlockedHints.length}
+          maxHints={HINT_LADDER.length + 1}
           onClose={() => {
             setShowModal(false);
             setShareDismissed(true);
