@@ -458,7 +458,9 @@ export default function Game() {
 
   useEffect(() => {
     fetchIplPlayersFromAPI()
-      .then((data) => setPlayerList(data))
+      .then((data) => {
+        if (data) setPlayerList(data);
+      })
       .catch(() => {});
   }, []);
 

@@ -1,4 +1,4 @@
-import { fetchPlayers } from "../services/ipl-api";
+import { fetchPlayers, fetchPlayerCount } from "../services/ipl-api";
 
 export type IplHintEntry = Record<string, unknown>;
 
@@ -44,11 +44,33 @@ function dbRowToHints(r: any): IplHintEntry[] {
   ];
 }
 
-export async function fetchIplPlayersFromAPI(): Promise<IplPlayerRow[]> {
+const LS_PLAYER_COUNT_KEY = "stumpd-ipl-puzzle-count";
+
+/**
+ * Fetches the player count from the API, compares with the locally stored
+ * count, and only fetches the full player list when the count has changed.
+ * Returns `null` when the hardcoded data is still up-to-date.
+ */
+export async function fetchIplPlayersFromAPI(): Promise<IplPlayerRow[] | null> {
+  const apiCount = await fetchPlayerCount();
+
+  let storedCount: number | null = null;
+  try {
+    const raw = localStorage.getItem(LS_PLAYER_COUNT_KEY);
+    if (raw != null) storedCount = parseInt(raw, 10);
+  } catch { /* SSR / private mode */ }
+
+  if (storedCount === apiCount) return null;
+
   const res = await fetchPlayers();
   if (!res.ok) throw new Error(`Failed to fetch IPL players: ${res.status}`);
   const json = await res.json();
   const rows: unknown[] = json.data ?? [];
+
+  try {
+    localStorage.setItem(LS_PLAYER_COUNT_KEY, String(apiCount));
+  } catch { /* quota / private mode */ }
+
   return rows.map((r: any) => ({
     name: r.name,
     meta: {
@@ -3799,16 +3821,16 @@ export const iplPlayers: IplPlayerRow[] = [
         "popularity": "icon"
       },
       {
-        "openingHint": "Gets into verbal fights on the field and fans love him for it"
+        "openingHint": "Married to one of Bollywood's biggest actresses"
       },
       {
         "trivia": [
-          "Has a tattoo on his arm that he rarely explains",
-          "Obsessed with fitness and goes to gym even on rest days",
-          "Became vegan and completely changed his diet",
-          "Gets very aggressive with bowlers and fielders on the pitch",
-          "Married Bollywood actress and had a daughter",
-          "Most centuries in ODI cricket in the world"
+          "Drinks black water that costs more than your meal",
+          "Has a gym inside his house worth crores",
+          "Won IPL after waiting 18 years in the same team",
+          "Gets angry on the field a lot",
+          "Married a Bollywood actress",
+          "Has the most ODI centuries in the world"
         ]
       }
     ]
@@ -3852,16 +3874,16 @@ export const iplPlayers: IplPlayerRow[] = [
         "popularity": "icon"
       },
       {
-        "openingHint": "Gets into verbal fights on the field and fans love him for it"
+        "openingHint": "Married to one of Bollywood's biggest actresses"
       },
       {
         "trivia": [
-          "Has a tattoo on his arm that he rarely explains",
-          "Obsessed with fitness and goes to gym even on rest days",
-          "Became vegan and completely changed his diet",
-          "Gets very aggressive with bowlers and fielders on the pitch",
-          "Married Bollywood actress and had a daughter",
-          "Most centuries in ODI cricket in the world"
+          "Drinks black water that costs more than your meal",
+          "Has a gym inside his house worth crores",
+          "Won IPL after waiting 18 years in the same team",
+          "Gets angry on the field a lot",
+          "Married a Bollywood actress",
+          "Has the most ODI centuries in the world"
         ]
       }
     ]
@@ -11604,108 +11626,7 @@ export const iplPlayers: IplPlayerRow[] = [
       }
     ]
   },
-  {
-    "name": "KEVIN",
-    "meta": {
-      "shortened": false,
-      "fullName": "Kevin O'Brien"
-    },
-    "hints": [
-      {
-        "age": 40
-      },
-      {
-        "country": "Ireland"
-      },
-      {
-        "iplTeam": "N/A"
-      },
-      {
-        "role": "Right-Hand All-Rounder"
-      },
-      {
-        "teams": [
-          "Ireland"
-        ]
-      },
-      {
-        "jersey": 13
-      },
-      {
-        "nickname": "Kev"
-      },
-      {
-        "era": "legend"
-      },
-      {
-        "popularity": "cult"
-      },
-      {
-        "openingHint": "Scored the fastest ever World Cup century to beat England in 2011"
-      },
-      {
-        "trivia": [
-          "Shocked the entire cricket world by beating England in World Cup",
-          "Scored fastest World Cup century ever in just 50 balls",
-          "Celebrated like nobody had ever celebrated a cricket win before",
-          "Became a national hero in Ireland overnight after that innings",
-          "Regular person who became a cricketing legend in one afternoon",
-          "Right-hand all-rounder who gave Ireland their greatest cricket moment"
-        ]
-      }
-    ]
-  },
-  {
-    "name": "O'BRI",
-    "meta": {
-      "shortened": true,
-      "fullName": "Kevin O'Brien"
-    },
-    "hints": [
-      {
-        "age": 40
-      },
-      {
-        "country": "Ireland"
-      },
-      {
-        "iplTeam": "N/A"
-      },
-      {
-        "role": "Right-Hand All-Rounder"
-      },
-      {
-        "teams": [
-          "Ireland"
-        ]
-      },
-      {
-        "jersey": 13
-      },
-      {
-        "nickname": "Kev"
-      },
-      {
-        "era": "legend"
-      },
-      {
-        "popularity": "cult"
-      },
-      {
-        "openingHint": "Scored the fastest ever World Cup century to beat England in 2011"
-      },
-      {
-        "trivia": [
-          "Shocked the entire cricket world by beating England in World Cup",
-          "Scored fastest World Cup century ever in just 50 balls",
-          "Celebrated like nobody had ever celebrated a cricket win before",
-          "Became a national hero in Ireland overnight after that innings",
-          "Regular person who became a cricketing legend in one afternoon",
-          "Right-hand all-rounder who gave Ireland their greatest cricket moment"
-        ]
-      }
-    ]
-  },
+
   {
     "name": "PAUL",
     "meta": {

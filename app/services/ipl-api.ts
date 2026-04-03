@@ -14,6 +14,14 @@ export async function fetchPlayers(): Promise<Response> {
   return fetch(`${API_BASE}/api/ipl/players`);
 }
 
+export async function fetchPlayerCount(): Promise<number> {
+  const res = await fetch(`${API_BASE}/api/ipl/players/count`);
+  if (!res.ok) throw new Error(`API returned ${res.status}`);
+  const json = await res.json();
+  if (!json.success || !json.data) throw new Error("Unexpected response shape");
+  return json.data.count as number;
+}
+
 export async function fetchPuzzleToday(): Promise<PuzzleData> {
   const res = await fetch(`${API_BASE}/api/ipl/puzzle/today`);
   if (!res.ok) throw new Error(`API returned ${res.status}`);
